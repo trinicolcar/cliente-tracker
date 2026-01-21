@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Edit, Trash2, Phone, MapPin } from 'lucide-react';
 import { Client } from '@/types/client';
+import { Delivery } from '@/types/delivery';
 import {
   Table,
   TableBody,
@@ -20,11 +21,12 @@ import {
 
 interface ClientsTableProps {
   clients: Client[];
+  deliveries: Delivery[];
   onEdit: (client: Client) => void;
   onDelete: (id: string) => void;
 }
 
-export function ClientsTable({ clients, onEdit, onDelete }: ClientsTableProps) {
+export function ClientsTable({ clients, deliveries, onEdit, onDelete }: ClientsTableProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -33,10 +35,16 @@ export function ClientsTable({ clients, onEdit, onDelete }: ClientsTableProps) {
     }).format(value);
   };
 
+  const getClientTotalDeliveries = (clientId: string) => {
+    return deliveries
+      .filter((d) => d.clientId === clientId)
+      .reduce((acc, d) => acc + d.precioTotal, 0);
+  };
+
   const getAccountStatusColor = (value: number) => {
-    if (value > 0) return 'text-warning';
-    if (value < 0) return 'text-destructive';
-    return 'text-success';
+    if (value > 0) return 'text-destructive';
+    if (value < 0) return 'text-green-600';
+    return 'text-muted-foreground';
   };
 
   return (
@@ -50,7 +58,7 @@ export function ClientsTable({ clients, onEdit, onDelete }: ClientsTableProps) {
             <TableHead>Teléfono</TableHead>
             <TableHead className="text-center">Porciones</TableHead>
             <TableHead>Próxima Entrega</TableHead>
-            <TableHead className="text-right">Valor Pedido</TableHead>
+            <TableHead className="text-right">Pedidos</TableHead>
             <TableHead className="text-right">Cuenta</TableHead>
             <TableHead className="text-center w-[100px]">Acciones</TableHead>
           </TableRow>
@@ -122,15 +130,36 @@ export function ClientsTable({ clients, onEdit, onDelete }: ClientsTableProps) {
                     })}
                   </span>
                 </TableCell>
-                <TableCell className="text-right font-medium">
-                  {formatCurrency(client.valorPedido)}
+                <TableCell className="text-right">
+                  <Tooltip>
+                    <TooltipTrigger className="font-medium">
+                      {formatCurrency(getClientTotalDeliveries(client.id))}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Total de entregas registradas</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </TableCell>
                 <TableCell
                   className={`text-right font-medium ${getAccountStatusColor(
                     client.estadoCuenta
                   )}`}
                 >
-                  {formatCurrency(client.estadoCuenta)}
+                  <Tooltip>
+                    <TooltipTrigger>
+                      {formatCurrency(client.estadoCuenta)}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Saldo pendiente</p>
+                      <p className="text-xs">
+                        {client.estadoCuenta > 0
+                          ? 'Debe pagar'
+                          : client.estadoCuenta < 0
+                            ? 'Crédito a favor'
+                            : 'Al día'}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

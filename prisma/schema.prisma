@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id              String     @id @default(uuid())
+  fechaInicial    DateTime
+  mes             String
+  nombre          String
+  activo          Boolean    @default(true)
+  telefono        String
+  porComida       Int
+  alDia           Int
+  porPedido       Int
+  totalPorciones  Int
+  duracionPedido  Int
+  proximaEntrega  DateTime
+  valorKg         Float
+  valorPedido     Float
+  direccion       String
+  latitud         Float
+  longitud        Float
+  estadoCuenta    Float      @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  deliveries      Delivery[]
+  pagos           Pago[]
+
+  @@index([activo])
+  @@index([nombre])
+}
+
+model Delivery {
+  id          String        @id @default(uuid())
+  clientId    String
+  fecha       DateTime
+  precioTotal Float
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  hamburguesas Hamburguesa[]
+  pagos       Pago[]
+
+  @@index([clientId])
+  @@index([fecha])
+}
+
+model Hamburguesa {
+  id          String   @id @default(uuid())
+  deliveryId  String
+  cantidad    Int
+  gramaje     Float
+  descripcion String?
+  createdAt   DateTime @default(now())
+  
+  delivery    Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId])
+}
+
+model Pago {
+  id          String   @id @default(uuid())
+  clientId    String
+  deliveryId  String
+  monto       Float
+  fechaPago   DateTime
+  metodo      String   // efectivo, transferencia, otro
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  delivery    Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([deliveryId])
+  @@index([fechaPago])
+}

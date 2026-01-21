@@ -1,21 +1,77 @@
 import { useState } from 'react';
-import { Plus, Users, Search } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Search } from 'lucide-react';
 import { Client, ClientFormData } from '@/types/client';
-import { mockClients } from '@/data/mockClients';
+import { clientsService } from '@/services/clients';
+import { deliveriesService } from '@/services/deliveries';
 import { ClientsTable } from '@/components/clients/ClientsTable';
 import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
 import { DeleteClientDialog } from '@/components/clients/DeleteClientDialog';
+import { BulkUploadDialog } from '@/components/clients/BulkUploadDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
 const Index = () => {
-  const [clients, setClients] = useState<Client[]>(mockClients);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+
+  // Fetch clients
+  const { data: clients = [], isLoading: loadingClients } = useQuery({
+    queryKey: ['clients'],
+    queryFn: clientsService.getAll,
+  });
+
+  // Fetch deliveries
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ['deliveries'],
+    queryFn: deliveriesService.getAll,
+  });
+
+  // Create client mutation
+  const createClientMutation = useMutation({
+    mutationFn: clientsService.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast.success('Cliente creado correctamente');
+      setFormDialogOpen(false);
+    },
+    onError: () => {
+      toast.error('Error al crear el cliente');
+    },
+  });
+
+  // Update client mutation
+  const updateClientMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ClientFormData }) =>
+      clientsService.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast.success('Cliente actualizado correctamente');
+      setFormDialogOpen(false);
+    },
+    onError: () => {
+      toast.error('Error al actualizar el cliente');
+    },
+  });
+
+  // Delete client mutation
+  const deleteClientMutation = useMutation({
+    mutationFn: clientsService.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast.success(`Cliente "${clientToDelete?.nombre}" eliminado`);
+      setDeleteDialogOpen(false);
+      setClientToDelete(null);
+    },
+    onError: () => {
+      toast.error('Error al eliminar el cliente');
+    },
+  });
 
   const filteredClients = clients.filter(
     (client) =>
@@ -44,51 +100,42 @@ const Index = () => {
 
   const handleConfirmDelete = () => {
     if (clientToDelete) {
-      setClients((prev) => prev.filter((c) => c.id !== clientToDelete.id));
-      toast.success(`Cliente "${clientToDelete.nombre}" eliminado`);
-      setClientToDelete(null);
-      setDeleteDialogOpen(false);
+      deleteClientMutation.mutate(clientToDelete.id);
     }
   };
 
   const handleSaveClient = (data: ClientFormData) => {
     if (selectedClient) {
-      // Editar
-      setClients((prev) =>
-        prev.map((c) =>
-          c.id === selectedClient.id ? { ...data, id: selectedClient.id } : c
-        )
-      );
-      toast.success('Cliente actualizado correctamente');
+      updateClientMutation.mutate({ id: selectedClient.id, data });
     } else {
-      // Crear
-      const newClient: Client = {
-        ...data,
-        id: String(Date.now()),
-      };
-      setClients((prev) => [...prev, newClient]);
-      toast.success('Cliente creado correctamente');
+      createClientMutation.mutate(data);
     }
   };
 
   const activeClients = clients.filter((c) => c.activo).length;
   const totalBalance = clients.reduce((acc, c) => acc + c.estadoCuenta, 0);
 
+  if (loadingClients) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando clientes...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container py-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-              <Users className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold">Gestión de Clientes</h1>
-              <p className="text-sm text-muted-foreground">
-                Sistema de administración de pedidos
-              </p>
-            </div>
+          <div>
+            <h1 className="text-2xl font-semibold">Gestión de Clientes</h1>
+            <p className="text-sm text-muted-foreground">
+              Sistema de administración de pedidos y entregas
+            </p>
           </div>
         </div>
       </header>
@@ -135,15 +182,21 @@ const Index = () => {
               className="pl-9"
             />
           </div>
-          <Button onClick={handleCreateClient}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo Cliente
-          </Button>
+          <div className="flex gap-2">
+            <BulkUploadDialog 
+              onSuccess={() => queryClient.invalidateQueries({ queryKey: ['clients'] })}
+            />
+            <Button onClick={handleCreateClient}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nuevo Cliente
+            </Button>
+          </div>
         </div>
 
         {/* Table */}
         <ClientsTable
           clients={filteredClients}
+          deliveries={deliveries}
           onEdit={handleEditClient}
           onDelete={handleDeleteClick}
         />
