@@ -17,7 +17,7 @@ export interface Delivery {
 export interface Pago {
   id: string;
   clientId: string;
-  deliveryId: string; // ID de entrega asociada
+  deliveryId?: string | null; // ID de entrega asociada (opcional)
   monto: number;         // Monto pagado
   fechaPago: Date;       // Fecha del pago
   metodo: 'efectivo' | 'transferencia' | 'otro';

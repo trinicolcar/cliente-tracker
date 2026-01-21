@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import DeliveryPage from "./pages/Delivery";
 import PagosPage from "./pages/Pagos";
 import EstadoCuentaPage from "./pages/EstadoCuenta";
+import ReportesPage from "./pages/Reportes";
+import InvoicePage from "./pages/Invoice";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -33,6 +35,8 @@ const App = () => {
             <Route path="/entregas" element={<DeliveryPage />} />
             <Route path="/pagos" element={<PagosPage />} />
             <Route path="/estado-cuenta" element={<EstadoCuentaPage />} />
+            <Route path="/reportes" element={<ReportesPage />} />
+            <Route path="/factura/:id" element={<InvoicePage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -25,6 +25,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
@@ -133,6 +134,23 @@ const DeliveryPage = () => {
   const sortedDays = Object.keys(deliveriesByDay).sort();
 
   const selectedClient = clients.find(c => c.id === selectedClientId) || null;
+
+  // Auto-calc precioTotal from client's valorKg when hamburguesas change
+  useEffect(() => {
+    if (!selectedClient) return;
+    if (!selectedClient.valorKg) return;
+    if (!hamburguesas || hamburguesas.length === 0) return;
+
+    // If user already set a precioTotal manually, don't overwrite
+    if (precioTotal && precioTotal.trim() !== '') return;
+
+    const totalGramos = hamburguesas.reduce((acc, h) => acc + h.cantidad * h.gramaje, 0);
+    const totalKg = totalGramos / 1000;
+    const computed = Math.round(totalKg * (selectedClient.valorKg || 0));
+    if (!isNaN(computed)) {
+      setPrecioTotal(String(computed));
+    }
+  }, [hamburguesas, selectedClient]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -426,6 +444,14 @@ const DeliveryPage = () => {
                                   ))}
                                 </TableBody>
                               </Table>
+                            </div>
+                            <div className="mt-3 flex gap-2">
+                              <Link to={`/factura/${delivery.id}`}>
+                                <Button variant="outline">Ver Factura</Button>
+                              </Link>
+                              <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/deliveries/${delivery.id}/invoice.pdf`} target="_blank" rel="noreferrer">
+                                <Button variant="ghost">Descargar PDF</Button>
+                              </a>
                             </div>
                           </div>
                         );

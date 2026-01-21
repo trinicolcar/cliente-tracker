@@ -71,7 +71,7 @@ model Hamburguesa {
 model Pago {
   id          String   @id @default(uuid())
   clientId    String
-  deliveryId  String
+  deliveryId  String?
   monto       Float
   fechaPago   DateTime
   metodo      String   // efectivo, transferencia, otro
@@ -80,7 +80,7 @@ model Pago {
   updatedAt   DateTime @updatedAt
   
   client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  delivery    Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  delivery    Delivery? @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([deliveryId])

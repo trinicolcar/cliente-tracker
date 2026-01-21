@@ -37,7 +37,7 @@ import { toast } from 'sonner';
 const PagosPage = () => {
   const queryClient = useQueryClient();
   const [selectedClient, setSelectedClient] = useState<string>('');
-  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string>('');
+  // delivery selection removed — payments are independent
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState<'efectivo' | 'transferencia' | 'otro'>('efectivo');
   const [descripcion, setDescripcion] = useState('');
@@ -67,8 +67,6 @@ const PagosPage = () => {
       queryClient.invalidateQueries({ queryKey: ['pagos'] });
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       toast.success('Pago registrado exitosamente');
-      // Limpiar formulario
-      setSelectedDeliveryId('');
       setMonto('');
       setMetodo('efectivo');
       setDescripcion('');
@@ -108,10 +106,6 @@ const PagosPage = () => {
       return;
     }
 
-    if (!selectedDeliveryId) {
-      toast.error('Por favor selecciona una entrega');
-      return;
-    }
 
     if (!monto.trim()) {
       toast.error('Por favor ingresa el monto del pago');
@@ -126,7 +120,6 @@ const PagosPage = () => {
 
     createPagoMutation.mutate({
       clientId: selectedClient,
-      deliveryId: selectedDeliveryId,
       monto: montoValue,
       fechaPago: new Date(),
       metodo,
@@ -167,36 +160,10 @@ const PagosPage = () => {
               </CardContent>
             </Card>
 
-            {/* Entregas disponibles */}
-            {selectedClient && clientDeliveries.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">
-                    Entregas del Cliente
-                  </CardTitle>
-                  <CardDescription>
-                    Selecciona la entrega asociada a este pago
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Select value={selectedDeliveryId} onValueChange={setSelectedDeliveryId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar entrega..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clientDeliveries.map((delivery) => (
-                        <SelectItem key={delivery.id} value={delivery.id}>
-                          {format(new Date(delivery.fecha), 'PPP', { locale: es })} - {formatCurrency(delivery.precioTotal)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
-            )}
+            {/* Entregas no se seleccionan al registrar pagos (pagos independientes) */}
 
             {/* Datos del pago */}
-            {selectedClient && selectedDeliveryId && (
+            {selectedClient && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Detalles del Pago</CardTitle>
@@ -260,15 +227,7 @@ const PagosPage = () => {
               </Card>
             )}
 
-            {selectedClient && clientDeliveries.length === 0 && (
-              <Card className="bg-muted/50">
-                <CardContent className="pt-6">
-                  <p className="text-sm text-center text-muted-foreground">
-                    Este cliente no tiene entregas registradas
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+            {/* No mostrar mensaje sobre entregas */}
           </div>
 
           {/* Panel de información */}

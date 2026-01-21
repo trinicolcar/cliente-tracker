@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Users, Package, DollarSign, FileText } from 'lucide-react';
+import { Users, Package, DollarSign, FileText, BarChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function Navigation() {
@@ -50,6 +50,15 @@ export function Navigation() {
             >
               <FileText className="h-4 w-4 mr-2" />
               Estado de Cuenta
+            </Button>
+          </Link>
+          <Link to="/reportes">
+            <Button
+              variant={location.pathname === '/reportes' ? 'default' : 'ghost'}
+              size="sm"
+            >
+              <BarChart className="h-4 w-4 mr-2" />
+              Reportes
             </Button>
           </Link>
         </nav>
