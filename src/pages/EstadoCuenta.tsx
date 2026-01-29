@@ -61,11 +61,19 @@ const EstadoCuentaPage = () => {
     ? pagos.filter((p) => p.clientId === selectedClient)
     : [];
 
+  const selectedClientData = clients.find((c) => c.id === selectedClient);
+  
   const totalEntregas = clientDeliveries.reduce((acc, d) => acc + d.precioTotal, 0);
   const totalPagos = clientPagos.reduce((acc, p) => acc + p.monto, 0);
-  const saldoPendiente = totalEntregas - totalPagos;
-
-  const selectedClientData = clients.find((c) => c.id === selectedClient);
+  
+  // Saldo inicial desde el Excel
+  const saldoInicial = selectedClientData?.estadoCuenta || 0;
+  
+  // Saldo por movimientos registrados en el sistema
+  const movimientosRegistrados = totalEntregas - totalPagos;
+  
+  // Saldo total = saldo inicial + movimientos
+  const saldoTotal = saldoInicial + movimientosRegistrados;
 
   // Combinar entregas y pagos en una sola línea de tiempo
   const timeline = [
@@ -123,7 +131,39 @@ const EstadoCuentaPage = () => {
         {/* Resumen de cuenta */}
         {selectedClient && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Saldo Inicial (del Excel) */}
+              <Card className="border-2 border-blue-200 bg-blue-50/50">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium">
+                      Saldo Inicial
+                    </CardTitle>
+                    <FileText className="h-4 w-4 text-blue-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className={`text-2xl font-bold ${
+                      saldoInicial > 0
+                        ? 'text-red-600'
+                        : saldoInicial < 0
+                          ? 'text-green-600'
+                          : 'text-muted-foreground'
+                    }`}
+                  >
+                    {formatCurrency(saldoInicial)}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {saldoInicial > 0
+                      ? 'Deuda inicial (Excel)'
+                      : saldoInicial < 0
+                        ? 'Crédito inicial'
+                        : 'Sin deuda inicial'}
+                  </p>
+                </CardContent>
+              </Card>
+
               {/* Total Entregas */}
               <Card>
                 <CardHeader className="pb-3">
@@ -135,7 +175,7 @@ const EstadoCuentaPage = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
+                  <div className="text-2xl font-bold text-red-600">
                     {formatCurrency(totalEntregas)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -169,7 +209,7 @@ const EstadoCuentaPage = () => {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm font-medium">
-                      Saldo Pendiente
+                      Saldo Total Actual
                     </CardTitle>
                     <FileText className="h-4 w-4 text-muted-foreground" />
                   </div>
@@ -177,25 +217,51 @@ const EstadoCuentaPage = () => {
                 <CardContent>
                   <div
                     className={`text-2xl font-bold ${
-                      saldoPendiente > 0
+                      saldoTotal > 0
                         ? 'text-destructive'
-                        : saldoPendiente < 0
+                        : saldoTotal < 0
                           ? 'text-green-600'
                           : 'text-muted-foreground'
                     }`}
                   >
-                    {formatCurrency(saldoPendiente)}
+                    {formatCurrency(saldoTotal)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {saldoPendiente > 0
+                    {saldoTotal > 0
                       ? 'Por pagar'
-                      : saldoPendiente < 0
+                      : saldoTotal < 0
                         ? 'Crédito a favor'
                         : 'Al día'}
                   </p>
                 </CardContent>
               </Card>
             </div>
+
+            {/* Tarjeta explicativa del cálculo */}
+            {saldoInicial !== 0 && (
+              <Card className="border-blue-200 bg-blue-50/30">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-full bg-blue-100 p-2">
+                      <FileText className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold mb-2">Cálculo del Saldo</h3>
+                      <div className="space-y-1 text-sm text-muted-foreground">
+                        <p>💼 Saldo inicial (Excel): <span className="font-medium text-foreground">{formatCurrency(saldoInicial)}</span></p>
+                        <p>➕ Entregas registradas: <span className="font-medium text-red-600">+{formatCurrency(totalEntregas)}</span></p>
+                        <p>➖ Pagos registrados: <span className="font-medium text-green-600">-{formatCurrency(totalPagos)}</span></p>
+                        <div className="border-t pt-1 mt-2">
+                          <p className="font-semibold text-foreground">
+                            = Saldo Total: <span className={saldoTotal > 0 ? 'text-red-600' : saldoTotal < 0 ? 'text-green-600' : ''}>{formatCurrency(saldoTotal)}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Información del cliente */}
             {selectedClientData && (

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Edit, Trash2, Phone, MapPin } from 'lucide-react';
@@ -18,6 +19,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 interface ClientsTableProps {
   clients: Client[];
@@ -27,6 +36,9 @@ interface ClientsTableProps {
 }
 
 export function ClientsTable({ clients, deliveries, onEdit, onDelete }: ClientsTableProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -47,34 +59,45 @@ export function ClientsTable({ clients, deliveries, onEdit, onDelete }: ClientsT
     return 'text-muted-foreground';
   };
 
+  // Paginación
+  const totalPages = Math.ceil(clients.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentClients = clients.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead className="w-[60px]">ID</TableHead>
-            <TableHead>Cliente</TableHead>
-            <TableHead className="text-center">Estado</TableHead>
-            <TableHead>Teléfono</TableHead>
-            <TableHead className="text-center">Porciones</TableHead>
-            <TableHead>Próxima Entrega</TableHead>
-            <TableHead className="text-right">Pedidos</TableHead>
-            <TableHead className="text-right">Cuenta</TableHead>
-            <TableHead className="text-center w-[100px]">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {clients.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={9}
-                className="h-32 text-center text-muted-foreground"
-              >
-                No hay clientes registrados
-              </TableCell>
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="w-[60px]">ID</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead className="text-center">Estado</TableHead>
+              <TableHead>Teléfono</TableHead>
+              <TableHead className="text-center">Porciones</TableHead>
+              <TableHead>Próxima Entrega</TableHead>
+              <TableHead className="text-right">Pedidos</TableHead>
+              <TableHead className="text-right">Cuenta</TableHead>
+              <TableHead className="text-center w-[100px]">Acciones</TableHead>
             </TableRow>
-          ) : (
-            clients.map((client) => (
+          </TableHeader>
+          <TableBody>
+            {currentClients.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={9}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  No hay clientes registrados
+                </TableCell>
+              </TableRow>
+            ) : (
+              currentClients.map((client) => (
               <TableRow key={client.id} className="group">
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   #{client.id}
@@ -187,5 +210,60 @@ export function ClientsTable({ clients, deliveries, onEdit, onDelete }: ClientsT
         </TableBody>
       </Table>
     </div>
+
+    {/* Paginación */}
+    {totalPages > 1 && (
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Mostrando {startIndex + 1} - {Math.min(endIndex, clients.length)} de {clients.length} clientes
+        </p>
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => goToPage(currentPage - 1)}
+                className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+              />
+            </PaginationItem>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+              // Mostrar solo algunas páginas alrededor de la actual
+              if (
+                page === 1 ||
+                page === totalPages ||
+                (page >= currentPage - 1 && page <= currentPage + 1)
+              ) {
+                return (
+                  <PaginationItem key={page}>
+                    <PaginationLink
+                      onClick={() => goToPage(page)}
+                      isActive={currentPage === page}
+                      className="cursor-pointer"
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              } else if (page === currentPage - 2 || page === currentPage + 2) {
+                return (
+                  <PaginationItem key={page}>
+                    <span className="px-2">...</span>
+                  </PaginationItem>
+                );
+              }
+              return null;
+            })}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => goToPage(currentPage + 1)}
+                className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    )}
+  </div>
   );
 }

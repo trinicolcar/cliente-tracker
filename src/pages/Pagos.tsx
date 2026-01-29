@@ -32,6 +32,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { toast } from 'sonner';
 
 const PagosPage = () => {
@@ -41,6 +49,8 @@ const PagosPage = () => {
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState<'efectivo' | 'transferencia' | 'otro'>('efectivo');
   const [descripcion, setDescripcion] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Fetch clients
   const { data: clients = [] } = useQuery({
@@ -132,6 +142,16 @@ const PagosPage = () => {
       metodo,
       descripcion: descripcion.trim() || undefined,
     });
+  };
+
+  // Paginación
+  const totalPages = Math.ceil(pagos.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentPagos = pagos.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
   return (
@@ -347,7 +367,7 @@ const PagosPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pagos.map((pago) => (
+                      {currentPagos.map((pago) => (
                         <TableRow key={pago.id}>
                           <TableCell className="text-sm font-medium">
                             {format(new Date(pago.fechaPago), 'PPp', {
@@ -390,6 +410,59 @@ const PagosPage = () => {
                     </TableBody>
                   </Table>
                 </div>
+
+                {/* Paginación */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Mostrando {startIndex + 1} - {Math.min(endIndex, pagos.length)} de {pagos.length} pagos
+                    </p>
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious 
+                            onClick={() => goToPage(currentPage - 1)}
+                            className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                          />
+                        </PaginationItem>
+                        
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                          if (
+                            page === 1 ||
+                            page === totalPages ||
+                            (page >= currentPage - 1 && page <= currentPage + 1)
+                          ) {
+                            return (
+                              <PaginationItem key={page}>
+                                <PaginationLink
+                                  onClick={() => goToPage(page)}
+                                  isActive={currentPage === page}
+                                  className="cursor-pointer"
+                                >
+                                  {page}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          } else if (page === currentPage - 2 || page === currentPage + 2) {
+                            return (
+                              <PaginationItem key={page}>
+                                <span className="px-2">...</span>
+                              </PaginationItem>
+                            );
+                          }
+                          return null;
+                        })}
+                        
+                        <PaginationItem>
+                          <PaginationNext 
+                            onClick={() => goToPage(currentPage + 1)}
+                            className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
 
                 {/* Resumen de pagos */}
                 <div className="mt-4 p-4 bg-muted rounded-lg space-y-2">

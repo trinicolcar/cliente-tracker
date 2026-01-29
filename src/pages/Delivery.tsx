@@ -26,6 +26,14 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { toast } from 'sonner';
 
 const DeliveryPage = () => {
@@ -36,6 +44,8 @@ const DeliveryPage = () => {
   );
   const [hamburguesas, setHamburguesas] = useState<Hamburguesa[]>([]);
   const [precioTotal, setPrecioTotal] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   // Fetch clients
   const { data: clients = [] } = useQuery({
@@ -131,6 +141,16 @@ const DeliveryPage = () => {
 
   // Ordenar días (más antiguos primero)
   const sortedDays = Object.keys(deliveriesByDay).sort();
+
+  // Paginación
+  const totalPages = Math.ceil(sortedDays.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentDays = sortedDays.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
 
   const selectedClient = clients.find(c => c.id === selectedClientId) || null;
 
@@ -299,8 +319,13 @@ const DeliveryPage = () => {
         {/* Agenda de entregas agrupada por días */}
         {sortedDays.length > 0 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold">Entregas Agendadas</h2>
-            {sortedDays.map((dayKey) => {
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold">Entregas Agendadas</h2>
+              <p className="text-sm text-muted-foreground">
+                {sortedDays.length} días con entregas
+              </p>
+            </div>
+            {currentDays.map((dayKey) => {
               const dayDeliveries = deliveriesByDay[dayKey];
               const dayDate = new Date(dayKey);
               const totalUnidades = dayDeliveries.reduce(
@@ -435,6 +460,59 @@ const DeliveryPage = () => {
                 </Card>
               );
             })}
+
+            {/* Paginación */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {startIndex + 1} - {Math.min(endIndex, sortedDays.length)} de {sortedDays.length} días
+                </p>
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => goToPage(currentPage - 1)}
+                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                    
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <PaginationItem key={page}>
+                            <PaginationLink
+                              onClick={() => goToPage(page)}
+                              isActive={currentPage === page}
+                              className="cursor-pointer"
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      } else if (page === currentPage - 2 || page === currentPage + 2) {
+                        return (
+                          <PaginationItem key={page}>
+                            <span className="px-2">...</span>
+                          </PaginationItem>
+                        );
+                      }
+                      return null;
+                    })}
+                    
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => goToPage(currentPage + 1)}
+                        className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </div>
         )}
       </main>
