@@ -19,6 +19,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface ProductFormProps {
   hamburguesas: Hamburguesa[];
@@ -33,8 +40,10 @@ export function ProductForm({
   onRemoveHamburguesa,
   onUpdateHamburguesa,
 }: ProductFormProps) {
+  const [tipo, setTipo] = useState<'hamburguesa' | 'nuggets'>('hamburguesa');
   const [cantidad, setCantidad] = useState('');
   const [gramaje, setGramaje] = useState('');
+  const [precio, setPrecio] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -43,35 +52,43 @@ export function ProductForm({
       return;
     }
 
-    const newHamburguesa: Hamburguesa = {
+    const newProduct: Hamburguesa = {
       id: editingId || String(Date.now()),
+      tipo,
       cantidad: parseInt(cantidad),
-      gramaje: parseInt(gramaje),
+      gramaje: parseFloat(gramaje),
+      precio: precio.trim() ? parseFloat(precio) : undefined,
       descripcion: descripcion.trim() || undefined,
     };
 
     if (editingId) {
-      onUpdateHamburguesa(newHamburguesa);
+      onUpdateHamburguesa(newProduct);
       setEditingId(null);
     } else {
-      onAddHamburguesa(newHamburguesa);
+      onAddHamburguesa(newProduct);
     }
 
+    setTipo('hamburguesa');
     setCantidad('');
     setGramaje('');
+    setPrecio('');
     setDescripcion('');
   };
 
-  const handleEdit = (hamburguesa: Hamburguesa) => {
-    setCantidad(hamburguesa.cantidad.toString());
-    setGramaje(hamburguesa.gramaje.toString());
-    setDescripcion(hamburguesa.descripcion || '');
-    setEditingId(hamburguesa.id);
+  const handleEdit = (product: Hamburguesa) => {
+    setTipo(product.tipo || 'hamburguesa');
+    setCantidad(product.cantidad.toString());
+    setGramaje(product.gramaje.toString());
+    setPrecio(product.precio?.toString() || '');
+    setDescripcion(product.descripcion || '');
+    setEditingId(product.id);
   };
 
   const handleCancel = () => {
+    setTipo('hamburguesa');
     setCantidad('');
     setGramaje('');
+    setPrecio('');
     setDescripcion('');
     setEditingId(null);
   };
@@ -84,24 +101,45 @@ export function ProductForm({
     }).format(value);
   };
 
+  const hamburguesas_list = hamburguesas.filter(h => !h.tipo || h.tipo === 'hamburguesa');
+  const nuggets_list = hamburguesas.filter(h => h.tipo === 'nuggets');
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle>
-            {editingId ? 'Editar Hamburguesa' : 'Agregar Hamburguesa'}
+            {editingId ? 'Editar Producto' : 'Agregar Producto'}
           </CardTitle>
           <CardDescription>
             {editingId
-              ? 'Modifica la cantidad, gramaje y precio'
-              : 'Agrega hamburguesas a la entrega'}
+              ? 'Modifica el tipo, cantidad, gramaje y precio'
+              : 'Agrega hamburguesas o nuggets a la entrega'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium mb-2 block">
+              Tipo de Producto
+            </label>
+            <Select
+              value={tipo}
+              onValueChange={(value: 'hamburguesa' | 'nuggets') => setTipo(value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hamburguesa">🍔 Hamburguesa</SelectItem>
+                <SelectItem value="nuggets">🍗 Nuggets</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium mb-2 block">
-                Cantidad
+                {tipo === 'nuggets' ? 'Paquetes' : 'Unidades'}
               </label>
               <Input
                 type="number"
@@ -121,6 +159,17 @@ export function ProductForm({
                 onChange={(e) => setGramaje(e.target.value)}
               />
             </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">
+                Precio (Opcional)
+              </label>
+              <Input
+                type="number"
+                placeholder="Ej: 5000"
+                value={precio}
+                onChange={(e) => setPrecio(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>
@@ -128,7 +177,7 @@ export function ProductForm({
               Descripción (Opcional)
             </label>
             <Input
-              placeholder="Ej: Sencilla, Doble, Con queso, etc."
+              placeholder={tipo === 'nuggets' ? 'Ej: Apanados crujientes' : 'Ej: Sencilla, Doble, Con queso'}
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
             />
@@ -148,14 +197,14 @@ export function ProductForm({
         </CardContent>
       </Card>
 
-      {hamburguesas.length > 0 && (
+      {hamburguesas_list.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              Hamburguesas ({hamburguesas.length})
+              🍔 Hamburguesas ({hamburguesas_list.length})
             </CardTitle>
             <CardDescription>
-              Total: {hamburguesas.reduce((acc, h) => acc + h.cantidad, 0)} unidades | {hamburguesas.reduce((acc, h) => acc + h.gramaje * h.cantidad, 0)}g
+              Total: {hamburguesas_list.reduce((acc, h) => acc + h.cantidad, 0)} unidades | {hamburguesas_list.reduce((acc, h) => acc + h.gramaje * h.cantidad, 0)}g
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -165,35 +214,103 @@ export function ProductForm({
                   <TableRow className="bg-muted/50">
                     <TableHead>Unidades</TableHead>
                     <TableHead>Gramaje</TableHead>
+                    <TableHead>Precio</TableHead>
                     <TableHead>Descripción</TableHead>
-                    <TableHead className="w-[80px]"></TableHead>
+                    <TableHead className="w-[100px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {hamburguesas.map((hamburguesa) => (
-                    <TableRow key={hamburguesa.id}>
+                  {hamburguesas_list.map((product) => (
+                    <TableRow key={product.id}>
                       <TableCell className="font-medium">
                         <Badge variant="secondary">
-                          {hamburguesa.cantidad}
+                          {product.cantidad}
                         </Badge>
                       </TableCell>
-                      <TableCell>{hamburguesa.gramaje}g</TableCell>
+                      <TableCell>{product.gramaje}g</TableCell>
+                      <TableCell>
+                        {product.precio ? formatCurrency(product.precio) : '-'}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {hamburguesa.descripcion || '-'}
+                        {product.descripcion || '-'}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleEdit(hamburguesa)}
+                            onClick={() => handleEdit(product)}
                           >
                             Editar
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => onRemoveHamburguesa(hamburguesa.id)}
+                            onClick={() => onRemoveHamburguesa(product.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {nuggets_list.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              🍗 Nuggets ({nuggets_list.length})
+            </CardTitle>
+            <CardDescription>
+              Total: {nuggets_list.reduce((acc, h) => acc + h.cantidad, 0)} paquetes | {nuggets_list.reduce((acc, h) => acc + h.gramaje * h.cantidad, 0)}g
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Paquetes</TableHead>
+                    <TableHead>Gramaje</TableHead>
+                    <TableHead>Precio</TableHead>
+                    <TableHead>Descripción</TableHead>
+                    <TableHead className="w-[100px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {nuggets_list.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-medium">
+                        <Badge variant="secondary">
+                          {product.cantidad}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{product.gramaje}g</TableCell>
+                      <TableCell>
+                        {product.precio ? formatCurrency(product.precio) : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {product.descripcion || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(product)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onRemoveHamburguesa(product.id)}
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -210,3 +327,4 @@ export function ProductForm({
     </div>
   );
 }
+

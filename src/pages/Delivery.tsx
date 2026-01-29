@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Save, Calendar } from 'lucide-react';
+import { Save, Calendar, CalendarClock } from 'lucide-react';
 import { Hamburguesa } from '@/types/delivery';
 import { clientsService } from '@/services/clients';
 import { deliveriesService } from '@/services/deliveries';
 import { ClientSelector } from '@/components/delivery/ClientSelector';
 import { ProductForm } from '@/components/delivery/ProductForm';
+import { RescheduleDeliveryDialog } from '@/components/delivery/RescheduleDeliveryDialog';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -25,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import {
   Pagination,
@@ -36,6 +38,13 @@ import {
 } from '@/components/ui/pagination';
 import { toast } from 'sonner';
 
+// Función auxiliar para parsear fechas en hora local (evita problemas de zona horaria)
+const parseDateLocal = (dateString: string | Date): Date => {
+  if (dateString instanceof Date) return dateString;
+  const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const DeliveryPage = () => {
   const queryClient = useQueryClient();
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -44,8 +53,14 @@ const DeliveryPage = () => {
   );
   const [hamburguesas, setHamburguesas] = useState<Hamburguesa[]>([]);
   const [precioTotal, setPrecioTotal] = useState('');
+  const [precioManualmenteEditado, setPrecioManualmenteEditado] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+  const [rescheduleDialog, setRescheduleDialog] = useState<{
+    open: boolean;
+    delivery: any;
+    clientName: string;
+  }>({ open: false, delivery: null, clientName: '' });
 
   // Fetch clients
   const { data: clients = [] } = useQuery({
@@ -71,6 +86,7 @@ const DeliveryPage = () => {
       setSelectedClientId('');
       setHamburguesas([]);
       setPrecioTotal('');
+      setPrecioManualmenteEditado(false);
     },
     onError: () => {
       toast.error('Error al registrar la entrega');
@@ -85,21 +101,95 @@ const DeliveryPage = () => {
     }).format(value);
   };
 
+  // Calcular precio total automáticamente basado en los productos
+  useEffect(() => {
+    // Si el usuario ha editado manualmente, no hacer nada
+    if (precioManualmenteEditado) {
+      return;
+    }
+
+    // Calcular el total de los items con precio
+    const totalItems = hamburguesas.reduce((acc, item) => {
+      if (item.precio && item.cantidad) {
+        return acc + (item.precio * item.cantidad);
+      }
+      return acc;
+    }, 0);
+    
+    // Solo actualizar el precio si el campo está vacío
+    // De lo contrario, mantener el valor actual para que el usuario pueda sumar manualmente
+    if (!precioTotal && totalItems > 0) {
+      setPrecioTotal(totalItems.toString());
+    } else if (hamburguesas.length === 0) {
+      setPrecioTotal('');
+    }
+  }, [hamburguesas, precioManualmenteEditado]);
+
   const handleAddHamburguesa = (hamburguesa: Hamburguesa) => {
-    setHamburguesas((prev) => [...prev, hamburguesa]);
-    toast.success('Hamburguesa agregada');
+    // Agregar tipo en la descripción si no tiene descripción
+    const productoConDescripcion = {
+      ...hamburguesa,
+      descripcion: hamburguesa.descripcion || (hamburguesa.tipo === 'nuggets' ? 'Nuggets' : 'Hamburguesa')
+    };
+    setHamburguesas((prev) => [...prev, productoConDescripcion]);
+    
+    // Sumar automáticamente el precio si el usuario no ha editado manualmente y el producto tiene precio
+    if (!precioManualmenteEditado && hamburguesa.precio && hamburguesa.cantidad) {
+      const nuevoPrecio = hamburguesa.precio * hamburguesa.cantidad;
+      const precioActual = precioTotal ? parseFloat(precioTotal) : 0;
+      setPrecioTotal((precioActual + nuevoPrecio).toString());
+    }
+    
+    toast.success(hamburguesa.tipo === 'nuggets' ? 'Nuggets agregados' : 'Hamburguesa agregada');
   };
 
   const handleRemoveHamburguesa = (hamburgesaId: string) => {
+    const item = hamburguesas.find(h => h.id === hamburgesaId);
     setHamburguesas((prev) => prev.filter((h) => h.id !== hamburgesaId));
-    toast.success('Hamburguesa removida');
+    
+    // Restar automáticamente el precio si el usuario no ha editado manualmente y el producto tiene precio
+    if (!precioManualmenteEditado && item?.precio && item?.cantidad) {
+      const precioARestar = item.precio * item.cantidad;
+      const precioActual = precioTotal ? parseFloat(precioTotal) : 0;
+      const nuevoPrecio = Math.max(0, precioActual - precioARestar);
+      setPrecioTotal(nuevoPrecio > 0 ? nuevoPrecio.toString() : '');
+    }
+    
+    toast.success(item?.tipo === 'nuggets' ? 'Nuggets removidos' : 'Hamburguesa removida');
   };
 
   const handleUpdateHamburguesa = (updatedHamburguesa: Hamburguesa) => {
+    // Encontrar el item anterior para calcular la diferencia
+    const itemAnterior = hamburguesas.find(h => h.id === updatedHamburguesa.id);
+    
+    // Agregar tipo en la descripción si no tiene descripción
+    const productoConDescripcion = {
+      ...updatedHamburguesa,
+      descripcion: updatedHamburguesa.descripcion || (updatedHamburguesa.tipo === 'nuggets' ? 'Nuggets' : 'Hamburguesa')
+    };
     setHamburguesas((prev) =>
-      prev.map((h) => (h.id === updatedHamburguesa.id ? updatedHamburguesa : h))
+      prev.map((h) => (h.id === productoConDescripcion.id ? productoConDescripcion : h))
     );
-    toast.success('Hamburguesa actualizada');
+    
+    // Recalcular el precio si el usuario no ha editado manualmente
+    if (!precioManualmenteEditado) {
+      const precioActual = precioTotal ? parseFloat(precioTotal) : 0;
+      let nuevoPrecio = precioActual;
+      
+      // Restar el precio anterior si existía
+      if (itemAnterior?.precio && itemAnterior?.cantidad) {
+        nuevoPrecio -= (itemAnterior.precio * itemAnterior.cantidad);
+      }
+      
+      // Sumar el precio nuevo
+      if (updatedHamburguesa.precio && updatedHamburguesa.cantidad) {
+        nuevoPrecio += (updatedHamburguesa.precio * updatedHamburguesa.cantidad);
+      }
+      
+      setPrecioTotal(nuevoPrecio > 0 ? nuevoPrecio.toString() : '');
+    }
+    
+    toast.success(updatedHamburguesa.tipo === 'nuggets' ? 'Nuggets actualizados' : 'Hamburguesa actualizada');
   };
 
   const handleSaveDelivery = () => {
@@ -113,23 +203,36 @@ const DeliveryPage = () => {
       return;
     }
 
-    if (!precioTotal.trim()) {
-      toast.error('Por favor ingresa el precio total de la entrega');
+    const totalCalculado = hamburguesas.reduce((acc, item) => {
+      if (item.precio && item.cantidad) {
+        return acc + (item.precio * item.cantidad);
+      }
+      return acc;
+    }, 0);
+
+    const precioFinal = precioTotal.trim() ? parseFloat(precioTotal) : totalCalculado;
+
+    if (precioFinal <= 0) {
+      toast.error('El precio total debe ser mayor a 0');
       return;
     }
 
+    // Crear fecha en hora local para evitar desfase de zona horaria
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    const fechaLocal = new Date(year, month - 1, day);
+    
     createDeliveryMutation.mutate({
       clientId: selectedClientId,
-      fecha: new Date(selectedDate),
+      fecha: fechaLocal,
       hamburguesas: hamburguesas,
-      precioTotal: parseFloat(precioTotal),
+      precioTotal: precioFinal,
     });
   };
 
   // Agrupar entregas por día
   const deliveriesByDay = deliveries.reduce(
     (acc, delivery) => {
-      const dayKey = format(new Date(delivery.fecha), 'yyyy-MM-dd');
+      const dayKey = format(parseDateLocal(delivery.fecha), 'yyyy-MM-dd');
       if (!acc[dayKey]) {
         acc[dayKey] = [];
       }
@@ -153,6 +256,23 @@ const DeliveryPage = () => {
   };
 
   const selectedClient = clients.find(c => c.id === selectedClientId) || null;
+
+  // Auto-calc precioTotal from client's valorKg when hamburguesas change
+  useEffect(() => {
+    if (!selectedClient) return;
+    if (!selectedClient.valorKg) return;
+    if (!hamburguesas || hamburguesas.length === 0) return;
+
+    // If user already set a precioTotal manually, don't overwrite
+    if (precioTotal && precioTotal.trim() !== '') return;
+
+    const totalGramos = hamburguesas.reduce((acc, h) => acc + h.cantidad * h.gramaje, 0);
+    const totalKg = totalGramos / 1000;
+    const computed = Math.round(totalKg * (selectedClient.valorKg || 0));
+    if (!isNaN(computed)) {
+      setPrecioTotal(String(computed));
+    }
+  }, [hamburguesas, selectedClient]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -214,16 +334,26 @@ const DeliveryPage = () => {
                     <CardHeader>
                       <CardTitle className="text-base">Precio Total de Entrega</CardTitle>
                       <CardDescription>
-                        Ingresa el monto total a cobrar por esta entrega
+                        {hamburguesas.some(h => h.precio) 
+                          ? '✓ Calculado automáticamente desde los precios de los productos. Puedes modificarlo si es necesario.'
+                          : 'Ingresa el monto total a cobrar por esta entrega'}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-2">
                       <Input
                         type="number"
                         placeholder="Ej: 50000"
                         value={precioTotal}
-                        onChange={(e) => setPrecioTotal(e.target.value)}
+                        onChange={(e) => {
+                          setPrecioTotal(e.target.value);
+                          setPrecioManualmenteEditado(true);
+                        }}
                       />
+                      {precioTotal && (
+                        <p className="text-sm font-medium text-primary">
+                          Total: {formatCurrency(parseFloat(precioTotal))}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -284,7 +414,7 @@ const DeliveryPage = () => {
                       Fecha
                     </p>
                     <p className="font-semibold">
-                      {format(new Date(selectedDate), 'PPP', { locale: es })}
+                      {format(parseDateLocal(selectedDate), 'PPP', { locale: es })}
                     </p>
                   </div>
 
@@ -327,7 +457,7 @@ const DeliveryPage = () => {
             </div>
             {currentDays.map((dayKey) => {
               const dayDeliveries = deliveriesByDay[dayKey];
-              const dayDate = new Date(dayKey);
+              const dayDate = parseDateLocal(dayKey);
               const totalUnidades = dayDeliveries.reduce(
                 (acc, delivery) =>
                   acc +
@@ -452,6 +582,28 @@ const DeliveryPage = () => {
                                 </TableBody>
                               </Table>
                             </div>
+                            <div className="mt-3 flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setRescheduleDialog({
+                                    open: true,
+                                    delivery,
+                                    clientName: client?.nombre || '',
+                                  })
+                                }
+                              >
+                                <CalendarClock className="h-4 w-4 mr-2" />
+                                Reagendar
+                              </Button>
+                              <Link to={`/factura/${delivery.id}`}>
+                                <Button variant="outline" size="sm">Ver Factura</Button>
+                              </Link>
+                              <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/deliveries/${delivery.id}/invoice.pdf`} target="_blank" rel="noreferrer">
+                                <Button variant="ghost" size="sm">Descargar PDF</Button>
+                              </a>
+                            </div>
                           </div>
                         );
                       })}
@@ -516,6 +668,18 @@ const DeliveryPage = () => {
           </div>
         )}
       </main>
+
+      {/* Diálogo de reagendar */}
+      {rescheduleDialog.delivery && (
+        <RescheduleDeliveryDialog
+          delivery={rescheduleDialog.delivery}
+          clientName={rescheduleDialog.clientName}
+          open={rescheduleDialog.open}
+          onOpenChange={(open) =>
+            setRescheduleDialog({ ...rescheduleDialog, open })
+          }
+        />
+      )}
     </div>
   );
 };

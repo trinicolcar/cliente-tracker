@@ -37,6 +37,20 @@ export const api = {
     return response.json();
   },
 
+  patch: async (endpoint: string, data: any) => {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to patch ${endpoint}`);
+    }
+    return response.json();
+  },
+
   delete: async (endpoint: string) => {
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'DELETE',

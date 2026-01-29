@@ -72,32 +72,32 @@ pagosRouter.post('/', async (req, res) => {
   try {
     const data = req.body;
 
-    const pago = await prisma.pago.create({
-      data: {
-        clientId: data.clientId,
-        deliveryId: data.deliveryId,
-        monto: data.monto,
-        fechaPago: new Date(data.fechaPago),
-        metodo: data.metodo,
-        descripcion: data.descripcion,
-      },
-      include: {
-        client: true,
-        delivery: true,
-      },
-    });
+      const pago = await prisma.$transaction(async (tx) => {
+        const created = await tx.pago.create({
+          data: {
+            clientId: data.clientId,
+            deliveryId: data.deliveryId || null,
+            monto: data.monto,
+            fechaPago: new Date(data.fechaPago),
+            metodo: data.metodo,
+            descripcion: data.descripcion || null,
+          },
+          include: {
+            client: true,
+            delivery: true,
+          },
+        });
 
-    // Update client's estadoCuenta
-    await prisma.client.update({
-      where: { id: data.clientId },
-      data: {
-        estadoCuenta: {
-          decrement: data.monto,
-        },
-      },
-    });
+        // Update client's estadoCuenta (always decrement by monto)
+        await tx.client.update({
+          where: { id: data.clientId },
+          data: { estadoCuenta: { decrement: data.monto } },
+        });
 
-    res.status(201).json(pago);
+        return created;
+      });
+
+      res.status(201).json(pago);
   } catch (error) {
     console.error('Error creating pago:', error);
     res.status(500).json({ error: 'Failed to create pago' });
@@ -119,30 +119,32 @@ pagosRouter.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Pago not found' });
     }
 
-    // Update pago
-    const pago = await prisma.pago.update({
-      where: { id },
-      data: {
-        monto: data.monto,
-        fechaPago: data.fechaPago ? new Date(data.fechaPago) : undefined,
-        metodo: data.metodo,
-        descripcion: data.descripcion,
-      },
-      include: {
-        client: true,
-        delivery: true,
-      },
-    });
-
-    // Adjust estadoCuenta (revert old amount, apply new amount)
-    const difference = data.monto - oldPago.monto;
-    await prisma.client.update({
-      where: { id: oldPago.clientId },
-      data: {
-        estadoCuenta: {
-          decrement: difference,
+    // Update pago inside a transaction and adjust estadoCuenta accordingly
+    const pago = await prisma.$transaction(async (tx) => {
+      const updated = await tx.pago.update({
+        where: { id },
+        data: {
+          monto: data.monto,
+          fechaPago: data.fechaPago ? new Date(data.fechaPago) : undefined,
+          metodo: data.metodo,
+          descripcion: data.descripcion,
+          deliveryId: data.deliveryId === undefined ? undefined : data.deliveryId,
         },
-      },
+        include: {
+          client: true,
+          delivery: true,
+        },
+      });
+
+      const difference = data.monto - oldPago.monto;
+      if (difference !== 0) {
+        await tx.client.update({
+          where: { id: oldPago.clientId },
+          data: { estadoCuenta: { decrement: difference } },
+        });
+      }
+
+      return updated;
     });
 
     res.json(pago);
@@ -157,28 +159,19 @@ pagosRouter.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Get pago to revert estadoCuenta
-    const pago = await prisma.pago.findUnique({
-      where: { id },
-    });
+    // Delete pago and revert estadoCuenta inside a transaction
+    await prisma.$transaction(async (tx) => {
+      const pago = await tx.pago.findUnique({ where: { id } });
+      if (!pago) {
+        throw new Error('NOT_FOUND');
+      }
 
-    if (!pago) {
-      return res.status(404).json({ error: 'Pago not found' });
-    }
+      await tx.pago.delete({ where: { id } });
 
-    // Delete pago
-    await prisma.pago.delete({
-      where: { id },
-    });
-
-    // Revert estadoCuenta
-    await prisma.client.update({
-      where: { id: pago.clientId },
-      data: {
-        estadoCuenta: {
-          increment: pago.monto,
-        },
-      },
+      await tx.client.update({
+        where: { id: pago.clientId },
+        data: { estadoCuenta: { increment: pago.monto } },
+      });
     });
 
     res.status(204).send();

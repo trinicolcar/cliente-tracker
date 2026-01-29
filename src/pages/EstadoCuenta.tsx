@@ -24,8 +24,17 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 
+// Función auxiliar para parsear fechas en hora local (evita problemas de zona horaria)
+const parseDateLocal = (dateString: string | Date): Date => {
+  if (dateString instanceof Date) return dateString;
+  const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const EstadoCuentaPage = () => {
   const [selectedClient, setSelectedClient] = useState<string>('');
+  const [dateStart, setDateStart] = useState<string>('');
+  const [dateEnd, setDateEnd] = useState<string>('');
 
   // Fetch clients
   const { data: clients = [] } = useQuery({
@@ -61,10 +70,33 @@ const EstadoCuentaPage = () => {
     ? pagos.filter((p) => p.clientId === selectedClient)
     : [];
 
+  // Función para filtrar por rango de fechas
+  const inDateRange = (dateVal: string | Date) => {
+    if (!dateStart && !dateEnd) return true;
+    const d = parseDateLocal(dateVal);
+    
+    if (dateStart) {
+      const startDate = new Date(dateStart);
+      if (d < startDate) return false;
+    }
+    
+    if (dateEnd) {
+      const endDate = new Date(dateEnd);
+      endDate.setHours(23, 59, 59, 999);
+      if (d > endDate) return false;
+    }
+    
+    return true;
+  };
+
+  // Filtrar entregas y pagos por rango de fechas
+  const deliveriesFiltered = clientDeliveries.filter((d) => inDateRange(d.fecha));
+  const pagosFiltered = clientPagos.filter((p) => inDateRange(p.fechaPago));
+
   const selectedClientData = clients.find((c) => c.id === selectedClient);
   
-  const totalEntregas = clientDeliveries.reduce((acc, d) => acc + d.precioTotal, 0);
-  const totalPagos = clientPagos.reduce((acc, p) => acc + p.monto, 0);
+  const totalEntregas = deliveriesFiltered.reduce((acc, d) => acc + d.precioTotal, 0);
+  const totalPagos = pagosFiltered.reduce((acc, p) => acc + p.monto, 0);
   
   // Saldo inicial desde el Excel
   const saldoInicial = selectedClientData?.estadoCuenta || 0;
@@ -75,9 +107,9 @@ const EstadoCuentaPage = () => {
   // Saldo total = saldo inicial + movimientos
   const saldoTotal = saldoInicial + movimientosRegistrados;
 
-  // Combinar entregas y pagos en una sola línea de tiempo
+  // Combinar entregas y pagos en una sola línea de tiempo (filtrados por fecha)
   const timeline = [
-    ...clientDeliveries.map((d) => ({
+    ...deliveriesFiltered.map((d) => ({
       id: d.id,
       tipo: 'entrega' as const,
       fecha: d.fecha,
@@ -85,7 +117,7 @@ const EstadoCuentaPage = () => {
       detalles: `${d.hamburguesas.length} tipos de hamburguesas`,
       hamburguesas: d.hamburguesas,
     })),
-    ...clientPagos.map((p) => ({
+    ...pagosFiltered.map((p) => ({
       id: p.id,
       tipo: 'pago' as const,
       fecha: p.fechaPago,
@@ -93,7 +125,7 @@ const EstadoCuentaPage = () => {
       detalles: `${p.metodo === 'efectivo' ? '💵 Efectivo' : p.metodo === 'transferencia' ? '🏦 Transferencia' : '❓ Otro'}${p.descripcion ? ` - ${p.descripcion}` : ''}`,
       metodo: p.metodo,
     })),
-  ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+  ].sort((a, b) => parseDateLocal(b.fecha).getTime() - parseDateLocal(a.fecha).getTime());
 
   return (
     <div className="min-h-screen bg-background">
@@ -128,10 +160,61 @@ const EstadoCuentaPage = () => {
           </CardContent>
         </Card>
 
+        {/* Filtros de fecha */}
+        {selectedClient && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Filtrar por Fecha</CardTitle>
+              <CardDescription>
+                Selecciona un rango de fechas para filtrar entregas y pagos
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <label className="block text-sm text-muted-foreground mb-2">Desde</label>
+                  <input
+                    type="date"
+                    value={dateStart}
+                    onChange={(e) => setDateStart(e.target.value)}
+                    className="w-full rounded-md border p-2"
+                  />
+                </div>
+
+                <div className="flex-1">
+                  <label className="block text-sm text-muted-foreground mb-2">Hasta</label>
+                  <input
+                    type="date"
+                    value={dateEnd}
+                    onChange={(e) => setDateEnd(e.target.value)}
+                    className="w-full rounded-md border p-2"
+                  />
+                </div>
+
+                {(dateStart || dateEnd) && (
+                  <button
+                    onClick={() => {
+                      setDateStart('');
+                      setDateEnd('');
+                    }}
+                    className="px-3 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80"
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Resumen de cuenta */}
         {selectedClient && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {(dateStart || dateEnd) && (
+              <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                Mostrando datos desde {dateStart ? new Date(dateStart).toLocaleDateString('es-CO') : 'el inicio'} hasta {dateEnd ? new Date(dateEnd).toLocaleDateString('es-CO') : 'hoy'}
+              </div>
+            )}            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Saldo Inicial (del Excel) */}
               <Card className="border-2 border-blue-200 bg-blue-50/50">
                 <CardHeader className="pb-3">
@@ -324,7 +407,7 @@ const EstadoCuentaPage = () => {
                         {timeline.map((item) => (
                           <TableRow key={`${item.tipo}-${item.id}`}>
                             <TableCell className="text-sm">
-                              {format(new Date(item.fecha), 'dd MMM yyyy', {
+                              {format(parseDateLocal(item.fecha), 'dd MMM yyyy', {
                                 locale: es,
                               })}
                             </TableCell>

@@ -22,6 +22,10 @@ export const deliveriesService = {
     return api.put(`/deliveries/${id}`, data);
   },
 
+  reschedule: async (id: string, fecha: Date): Promise<Delivery> => {
+    return api.patch(`/deliveries/${id}/reschedule`, { fecha: fecha.toISOString() });
+  },
+
   delete: async (id: string): Promise<boolean> => {
     return api.delete(`/deliveries/${id}`);
   },

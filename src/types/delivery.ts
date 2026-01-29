@@ -1,7 +1,9 @@
 export interface Hamburguesa {
   id: string;
-  cantidad: number;      // Cantidad de unidades
+  tipo?: 'hamburguesa' | 'nuggets';  // Tipo de producto
+  cantidad: number;      // Cantidad de unidades o paquetes
   gramaje: number;       // Peso en gramos
+  precio?: number;       // Precio unitario o del paquete
   descripcion?: string;  // Ej: "Sencilla", "Doble", "Con queso"
 }
 
@@ -17,7 +19,7 @@ export interface Delivery {
 export interface Pago {
   id: string;
   clientId: string;
-  deliveryId: string; // ID de entrega asociada
+  deliveryId?: string | null; // ID de entrega asociada (opcional)
   monto: number;         // Monto pagado
   fechaPago: Date;       // Fecha del pago
   metodo: 'efectivo' | 'transferencia' | 'otro';
