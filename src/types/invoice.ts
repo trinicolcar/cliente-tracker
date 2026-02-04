@@ -2,6 +2,7 @@ export interface InvoiceItem {
   descripcion?: string;
   cantidad: number;
   gramaje?: number;
+  precio?: number;
 }
 
 export interface InvoicePago {

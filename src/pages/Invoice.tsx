@@ -58,6 +58,8 @@ export default function InvoicePage() {
               <th>Descripción</th>
               <th>Cantidad</th>
               <th>Gramaje</th>
+              <th className="text-right">Precio Unit.</th>
+              <th className="text-right">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -66,6 +68,8 @@ export default function InvoicePage() {
                 <td className="p-2">{it.descripcion || 'Item'}</td>
                 <td className="p-2">{it.cantidad}</td>
                 <td className="p-2">{it.gramaje ?? '-'}</td>
+                <td className="p-2 text-right">${(it.precio || 0).toLocaleString()}</td>
+                <td className="p-2 text-right font-semibold">${((it.precio || 0) * it.cantidad).toLocaleString()}</td>
               </tr>
             ))}
           </tbody>

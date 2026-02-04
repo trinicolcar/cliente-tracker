@@ -171,14 +171,19 @@ deliveriesRouter.get('/:id/invoice.pdf', async (req, res) => {
     const tableTop = doc.y;
     doc.fontSize(10);
     doc.text('Descripción', 50, tableTop);
-    doc.text('Cantidad', 300, tableTop);
-    doc.text('Gramaje', 380, tableTop);
+    doc.text('Cant.', 280, tableTop);
+    doc.text('Gramaje', 330, tableTop);
+    doc.text('P. Unit.', 400, tableTop);
+    doc.text('Total', 480, tableTop);
     doc.moveDown();
 
     delivery.hamburguesas.forEach((h: any) => {
-      doc.text(h.descripcion || '-', 50, doc.y);
-      doc.text(String(h.cantidad), 300, doc.y);
-      doc.text(h.gramaje ? `${h.gramaje}g` : '-', 380, doc.y);
+      const yPos = doc.y;
+      doc.text(h.descripcion || '-', 50, yPos);
+      doc.text(String(h.cantidad), 280, yPos);
+      doc.text(h.gramaje ? `${h.gramaje}g` : '-', 330, yPos);
+      doc.text(`$${(h.precio || 0).toLocaleString()}`, 400, yPos);
+      doc.text(`$${((h.precio || 0) * h.cantidad).toLocaleString()}`, 480, yPos);
       doc.moveDown();
     });
 
