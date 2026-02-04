@@ -7,6 +7,7 @@ import { clientsService } from '@/services/clients';
 import { deliveriesService } from '@/services/deliveries';
 import { pagosService } from '@/services/pagos';
 import { ClientCombobox } from '@/components/ClientCombobox';
+import { EditPagoDialog } from '@/components/pagos/EditPagoDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -334,6 +335,7 @@ const PagosPage = () => {
                         <TableHead>Método</TableHead>
                         <TableHead>Monto</TableHead>
                         <TableHead>Descripción</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -374,6 +376,9 @@ const PagosPage = () => {
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {pago.descripcion || '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <EditPagoDialog pago={pago} />
                           </TableCell>
                         </TableRow>
                       ))}
