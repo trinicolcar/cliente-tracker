@@ -55,6 +55,8 @@ const DeliveryPage = () => {
   const [precioTotal, setPrecioTotal] = useState('');
   const [precioManualmenteEditado, setPrecioManualmenteEditado] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterStart, setFilterStart] = useState<string>('');
+  const [filterEnd, setFilterEnd] = useState<string>('');
   const itemsPerPage = 5;
   const [rescheduleDialog, setRescheduleDialog] = useState<{
     open: boolean;
@@ -69,10 +71,15 @@ const DeliveryPage = () => {
   });
 
   // Fetch deliveries
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ['deliveries'],
-    queryFn: deliveriesService.getAll,
+  const { data: deliveries = [], refetch: refetchDeliveries } = useQuery({
+    queryKey: ['deliveries', filterStart, filterEnd],
+    queryFn: () => deliveriesService.getAll({ startDate: filterStart, endDate: filterEnd }),
   });
+
+  useEffect(() => {
+    refetchDeliveries();
+    setCurrentPage(1);
+  }, [filterStart, filterEnd, refetchDeliveries]);
 
   // Create delivery mutation
   const createDeliveryMutation = useMutation({
@@ -123,7 +130,7 @@ const DeliveryPage = () => {
     } else if (hamburguesas.length === 0) {
       setPrecioTotal('');
     }
-  }, [hamburguesas, precioManualmenteEditado]);
+  }, [hamburguesas, precioManualmenteEditado, precioTotal]);
 
   const handleAddHamburguesa = (hamburguesa: Hamburguesa) => {
     // Agregar tipo en la descripción si no tiene descripción
@@ -279,11 +286,45 @@ const DeliveryPage = () => {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container py-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Agenda de Entregas</h1>
-            <p className="text-sm text-muted-foreground">
-              Planifica entregas de hamburguesas por día
-            </p>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold">Programación de Entregas</h1>
+              <p className="text-sm text-muted-foreground">
+                Gestiona las entregas de los clientes y programa nuevas entregas
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div>
+                <label className="block text-sm text-muted-foreground">Desde</label>
+                <input
+                  type="date"
+                  value={filterStart}
+                  onChange={(e) => setFilterStart(e.target.value)}
+                  className="mt-1 block w-44 rounded-md border p-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground">Hasta</label>
+                <input
+                  type="date"
+                  value={filterEnd}
+                  onChange={(e) => setFilterEnd(e.target.value)}
+                  className="mt-1 block w-44 rounded-md border p-2"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFilterStart('');
+                    setFilterEnd('');
+                  }}
+                >
+                  Limpiar
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </header>

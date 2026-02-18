@@ -88,3 +88,32 @@ model Pago {
   @@index([deliveryId])
   @@index([fechaPago])
 }
+
+model Barra {
+  id              String   @id @default(uuid())
+  pesoGramos      Float
+  cantidad        Float
+  fechaProduccion DateTime
+  disponible      Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([fechaProduccion])
+  @@index([pesoGramos])
+  @@index([disponible])
+}
+
+model Porcionado {
+  id          String   @id @default(uuid())
+  producto    String   @default("hamburguesa")
+  gramaje     Float
+  cantidad    Int
+  fecha       DateTime
+  estado      String   @default("pendiente") // pendiente | porcionado
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([fecha])
+  @@index([gramaje])
+  @@index([estado])
+}

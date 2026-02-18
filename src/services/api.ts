@@ -1,10 +1,25 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+const buildError = async (response: Response, fallback: string) => {
+  try {
+    const data = await response.json();
+    if (data?.error && typeof data.error === 'string') {
+      return new Error(data.error);
+    }
+    if (data?.message && typeof data.message === 'string') {
+      return new Error(data.message);
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return new Error(fallback);
+};
+
 export const api = {
   get: async (endpoint: string) => {
     const response = await fetch(`${API_URL}${endpoint}`);
     if (!response.ok) {
-      throw new Error(`Failed to fetch ${endpoint}`);
+      throw await buildError(response, `Failed to fetch ${endpoint}`);
     }
     return response.json();
   },
@@ -18,7 +33,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      throw new Error(`Failed to post to ${endpoint}`);
+      throw await buildError(response, `Failed to post to ${endpoint}`);
     }
     return response.json();
   },
@@ -32,7 +47,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      throw new Error(`Failed to update ${endpoint}`);
+      throw await buildError(response, `Failed to update ${endpoint}`);
     }
     return response.json();
   },
@@ -46,7 +61,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      throw new Error(`Failed to patch ${endpoint}`);
+      throw await buildError(response, `Failed to patch ${endpoint}`);
     }
     return response.json();
   },
@@ -56,7 +71,7 @@ export const api = {
       method: 'DELETE',
     });
     if (!response.ok) {
-      throw new Error(`Failed to delete ${endpoint}`);
+      throw await buildError(response, `Failed to delete ${endpoint}`);
     }
     return response.ok;
   },

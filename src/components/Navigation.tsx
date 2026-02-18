@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Users, Package, DollarSign, FileText, BarChart } from 'lucide-react';
+import { Users, Package, DollarSign, FileText, BarChart, Scissors, PackagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function Navigation() {
@@ -59,6 +59,24 @@ export function Navigation() {
             >
               <BarChart className="h-4 w-4 mr-2" />
               Reportes
+            </Button>
+          </Link>
+          <Link to="/porcionada">
+            <Button
+              variant={location.pathname === '/porcionada' ? 'default' : 'ghost'}
+              size="sm"
+            >
+              <Scissors className="h-4 w-4 mr-2" />
+              Porcionada
+            </Button>
+          </Link>
+          <Link to="/barras">
+            <Button
+              variant={location.pathname === '/barras' ? 'default' : 'ghost'}
+              size="sm"
+            >
+              <PackagePlus className="h-4 w-4 mr-2" />
+              Barras
             </Button>
           </Link>
         </nav>
