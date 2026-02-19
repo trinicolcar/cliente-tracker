@@ -52,7 +52,7 @@ echo.
 echo ========================================
 echo   El sistema se esta iniciando...
 echo   
-echo   Frontend: http://localhost:5173
+echo   Frontend: http://localhost:8080
 echo   Backend:  http://localhost:3000
 echo   
 echo   El navegador se abrira automaticamente
@@ -63,7 +63,7 @@ echo.
 timeout /t 3 /nobreak >nul
 
 :: Abrir el navegador en segundo plano
-start http://localhost:5173
+start http://localhost:8080
 
 :: Iniciar el servidor y el frontend
 call npm run dev:all
