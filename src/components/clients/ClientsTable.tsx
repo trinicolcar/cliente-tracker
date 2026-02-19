@@ -53,10 +53,11 @@ export function ClientsTable({ clients, deliveries, onEdit, onDelete }: ClientsT
       .reduce((acc, d) => acc + d.precioTotal, 0);
   };
 
+  // Devuelve clases de color de fondo y texto según el estado de cuenta
   const getAccountStatusColor = (value: number) => {
-    if (value > 0) return 'text-destructive';
-    if (value < 0) return 'text-green-600';
-    return 'text-muted-foreground';
+    if (value > 0) return 'bg-red-100 text-red-700 border border-red-300'; // Deuda
+    if (value < 0) return 'bg-green-100 text-green-700 border border-green-300'; // Saldo a favor
+    return 'bg-gray-100 text-gray-500 border border-gray-200'; // Al día
   };
 
   // Paginación
@@ -163,14 +164,12 @@ export function ClientsTable({ clients, deliveries, onEdit, onDelete }: ClientsT
                     </TooltipContent>
                   </Tooltip>
                 </TableCell>
-                <TableCell
-                  className={`text-right font-medium ${getAccountStatusColor(
-                    client.estadoCuenta
-                  )}`}
-                >
+                <TableCell>
                   <Tooltip>
                     <TooltipTrigger>
-                      {formatCurrency(client.estadoCuenta)}
+                      <span className={`inline-block px-2 py-1 rounded-md font-semibold text-sm ${getAccountStatusColor(client.estadoCuenta)}`}>
+                        {formatCurrency(client.estadoCuenta)}
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Saldo pendiente</p>

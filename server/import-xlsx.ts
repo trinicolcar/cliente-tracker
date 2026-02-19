@@ -89,7 +89,8 @@ async function importFromXlsx() {
             direccion: '',
             latitud: latitud,
             longitud: longitud,
-            estadoCuenta: Number(row['SALDO']) || Number(row[' DEUDA ']) || 0,
+            // El saldo a favor es positivo, la deuda es negativa
+            estadoCuenta: ((Number(row['Deudas']) || 0) - Number(row['Saldos']) || 0 ),
           },
         });
         
