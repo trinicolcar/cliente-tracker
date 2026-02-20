@@ -76,6 +76,9 @@ const DeliveryPage = () => {
     queryFn: () => deliveriesService.getAll({ startDate: filterStart, endDate: filterEnd }),
   });
 
+  // selectedClient debe declararse antes del useEffect
+  const selectedClient = clients.find(c => c.id === selectedClientId) || null;
+
   useEffect(() => {
     refetchDeliveries();
     setCurrentPage(1);
@@ -108,13 +111,9 @@ const DeliveryPage = () => {
     }).format(value);
   };
 
-  // Calcular precio total automáticamente basado en los productos
+  // Calcular precio total automáticamente basado en los productos o valorKg
   useEffect(() => {
-    // Si el usuario ha editado manualmente, no hacer nada
-    if (precioManualmenteEditado) {
-      return;
-    }
-
+    if (precioManualmenteEditado) return;
     // Calcular el total de los items con precio
     const totalItems = hamburguesas.reduce((acc, item) => {
       if (item.precio && item.cantidad) {
@@ -122,15 +121,25 @@ const DeliveryPage = () => {
       }
       return acc;
     }, 0);
-    
-    // Solo actualizar el precio si el campo está vacío
-    // De lo contrario, mantener el valor actual para que el usuario pueda sumar manualmente
-    if (!precioTotal && totalItems > 0) {
+
+    if (totalItems > 0) {
       setPrecioTotal(totalItems.toString());
-    } else if (hamburguesas.length === 0) {
-      setPrecioTotal('');
+      return;
     }
-  }, [hamburguesas, precioManualmenteEditado, precioTotal]);
+
+    // Si no hay precios, usar valorKg del cliente
+    if (selectedClient && selectedClient.valorKg && hamburguesas.length > 0) {
+      const totalGramos = hamburguesas.reduce((acc, h) => acc + h.cantidad * h.gramaje, 0);
+      const totalKg = totalGramos / 1000;
+      const computed = Math.round(totalKg * (selectedClient.valorKg || 0));
+      if (!isNaN(computed)) {
+        setPrecioTotal(String(computed));
+        return;
+      }
+    }
+    // Si no hay nada, dejar vacío
+    setPrecioTotal('');
+  }, [hamburguesas, precioManualmenteEditado, selectedClient]);
 
   const handleAddHamburguesa = (hamburguesa: Hamburguesa) => {
     // Agregar tipo en la descripción si no tiene descripción
@@ -261,25 +270,6 @@ const DeliveryPage = () => {
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
-
-  const selectedClient = clients.find(c => c.id === selectedClientId) || null;
-
-  // Auto-calc precioTotal from client's valorKg when hamburguesas change
-  useEffect(() => {
-    if (!selectedClient) return;
-    if (!selectedClient.valorKg) return;
-    if (!hamburguesas || hamburguesas.length === 0) return;
-
-    // If user already set a precioTotal manually, don't overwrite
-    if (precioTotal && precioTotal.trim() !== '') return;
-
-    const totalGramos = hamburguesas.reduce((acc, h) => acc + h.cantidad * h.gramaje, 0);
-    const totalKg = totalGramos / 1000;
-    const computed = Math.round(totalKg * (selectedClient.valorKg || 0));
-    if (!isNaN(computed)) {
-      setPrecioTotal(String(computed));
-    }
-  }, [hamburguesas, selectedClient]);
 
   return (
     <div className="min-h-screen bg-background">
