@@ -37,7 +37,7 @@ const buildDayRangeFromDate = (date: Date) => {
   return { start, end };
 };
 
-// GET porcionados for a date (creates missing rows from deliveries)
+// GET porcionados for a date (aggregates from deliveries/hamburguesas)
 porcionadosRouter.get('/', async (req, res) => {
   try {
     const { fecha } = req.query;
@@ -51,6 +51,7 @@ porcionadosRouter.get('/', async (req, res) => {
       return res.status(400).json({ error: 'Fecha inválida' });
     }
 
+    // Get all hamburguesas from deliveries for this date
     const deliveries = await prisma.delivery.findMany({
       where: {
         fecha: {
@@ -61,7 +62,8 @@ porcionadosRouter.get('/', async (req, res) => {
       include: { hamburguesas: true },
     });
 
-    const aggregated = new Map<string, { producto: string; gramaje: number; cantidad: number }>();
+    // Aggregate hamburguesas by producto and gramaje
+    const aggregated = new Map<string, { producto: string; gramaje: number; cantidad: number; estado: string }>();
 
     deliveries.forEach((delivery) => {
       delivery.hamburguesas.forEach((h) => {
@@ -70,55 +72,41 @@ porcionadosRouter.get('/', async (req, res) => {
         const cantidad = Number(h.cantidad || 0);
         const key = `${producto}-${gramaje}`;
         const current = aggregated.get(key);
+        
         if (current) {
           current.cantidad += cantidad;
+          // If any hamburguesa in this group is porcionado, mark the whole group as porcionado
+          if (h.estado === 'porcionado') {
+            current.estado = 'porcionado';
+          }
         } else {
-          aggregated.set(key, { producto, gramaje, cantidad });
+          aggregated.set(key, { 
+            producto, 
+            gramaje, 
+            cantidad, 
+            estado: h.estado || 'pendiente'
+          });
         }
       });
     });
 
-    const items = Array.from(aggregated.values());
+    const items = Array.from(aggregated.values()).map((it) => ({
+      id: `${it.producto}-${it.gramaje}`,
+      producto: it.producto,
+      gramaje: it.gramaje,
+      cantidad: it.cantidad,
+      fecha: toDayStart(fecha),
+      estado: it.estado as 'pendiente' | 'porcionado',
+    }));
 
-    // Do NOT create or update Porcionado rows here.
-    // Instead, fetch any existing Porcionado rows for the date and merge
-    // their estado (and id) into the aggregated items. The quantity
-    // must come from the deliveries aggregation.
-    const existingPorcionados = await prisma.porcionado.findMany({
-      where: {
-        fecha: {
-          gte: range.start,
-          lte: range.end,
-        },
-      },
-      select: { id: true, producto: true, gramaje: true, estado: true },
-    });
-
-    const merged = items.map((it) => {
-      const match = existingPorcionados.find(
-        (p) => p.producto === it.producto && Number(p.gramaje || 0) === Number(it.gramaje || 0)
-      );
-      return {
-        // UI-friendly id: use existing porcionado id when available,
-        // otherwise generate a synthetic id for rendering only
-        id: match ? match.id : `agg-${it.producto}-${it.gramaje}`,
-        producto: it.producto,
-        gramaje: it.gramaje,
-        cantidad: it.cantidad,
-        fecha: toDayStart(fecha),
-        estado: match ? (match.estado as 'pendiente' | 'porcionado') : 'pendiente',
-        porcionadoId: match ? match.id : null,
-      };
-    });
-
-    res.json(merged);
+    res.json(items);
   } catch (error) {
     console.error('Error fetching porcionados:', error);
     res.status(500).json({ error: 'Failed to fetch porcionados' });
   }
 });
 
-// PATCH porcionado status
+// PATCH porcionado status - updates all hamburguesas matching producto and gramaje
 porcionadosRouter.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -128,35 +116,89 @@ porcionadosRouter.patch('/:id', async (req, res) => {
       return res.status(400).json({ error: 'estado es requerido' });
     }
 
-    const target = await prisma.porcionado.findUnique({ where: { id } });
-    if (!target) {
-      return res.status(404).json({ error: 'Porcionado no encontrado' });
+    // Parse id to get producto and gramaje (format: "producto-gramaje")
+    const parts = id.split('-');
+    if (parts.length < 2) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+    
+    // Reconstruct producto (may contain hyphens) and gramaje
+    const gramaje = parseFloat(parts[parts.length - 1]);
+    const producto = parts.slice(0, -1).join('-');
+    
+    if (isNaN(gramaje)) {
+      return res.status(400).json({ error: 'ID inválido: gramaje no es un número' });
     }
 
-    if (estado === 'pendiente' && target.estado === 'porcionado') {
+    const range = buildDayRange(typeof fecha === 'string' ? fecha : new Date().toISOString());
+    if (!range) {
+      return res.status(400).json({ error: 'Fecha inválida' });
+    }
+
+    // Check current state
+    const deliveries = await prisma.delivery.findMany({
+      where: {
+        fecha: {
+          gte: range.start,
+          lte: range.end,
+        },
+      },
+      include: { hamburguesas: true },
+    });
+
+    const relevantHamburguesas = deliveries.flatMap(d => 
+      d.hamburguesas.filter(h => 
+        (h.tipo || 'hamburguesa') === producto && 
+        Number(h.gramaje || 0) === gramaje
+      )
+    );
+
+    if (relevantHamburguesas.length === 0) {
+      return res.status(404).json({ error: 'No hamburguesas encontradas' });
+    }
+
+    const currentEstado = relevantHamburguesas[0].estado || 'pendiente';
+
+    if (estado === 'pendiente' && currentEstado === 'porcionado') {
       return res.status(400).json({ error: 'No se puede desmarcar un porcionado' });
     }
 
-    if (estado === 'porcionado' && target.estado !== 'porcionado') {
-      const range = buildDayRangeFromDate(target.fecha);
+    if (estado === 'porcionado' && currentEstado !== 'porcionado') {
+      // Check if already porcionadas
+      const alreadyPorcionadas = relevantHamburguesas.filter(h => h.estado === 'porcionado');
+      
+      if (alreadyPorcionadas.length === relevantHamburguesas.length) {
+        // All already porcionadas, just return success
+        res.json({ 
+          success: true, 
+          message: 'Todos los items ya están porcionados',
+          producto,
+          gramaje,
+          estado: 'porcionado'
+        });
+        return;
+      }
 
-      const existingPorcionados = await prisma.porcionado.findMany({
+      // Calculate grams needed
+      const toAddGrams = relevantHamburguesas
+        .filter(h => h.estado !== 'porcionado')
+        .reduce((sum, h) => sum + (Number(h.gramaje || 0) * Number(h.cantidad || 0)), 0);
+
+      // Get all porcionados from the date to know what's already used
+      const allDeliveries = await prisma.delivery.findMany({
         where: {
-          estado: 'porcionado',
           fecha: {
             gte: range.start,
             lte: range.end,
           },
-          NOT: { id },
         },
-        select: { gramaje: true, cantidad: true },
+        include: { hamburguesas: true },
       });
 
-      const alreadyUsedGrams = existingPorcionados.reduce((sum, p) => {
-        return sum + Number(p.gramaje || 0) * Number(p.cantidad || 0);
-      }, 0);
-
-      const toAddGrams = Number(target.gramaje || 0) * Number(target.cantidad || 0);
+      const alreadyUsedGrams = allDeliveries
+        .flatMap(d => d.hamburguesas)
+        .filter(h => h.estado === 'porcionado')
+        .reduce((sum, h) => sum + (Number(h.gramaje || 0) * Number(h.cantidad || 0)), 0);
 
       const barras = await prisma.barra.findMany({
         where: {
@@ -166,22 +208,21 @@ porcionadosRouter.patch('/:id', async (req, res) => {
         select: { id: true, pesoGramos: true, cantidad: true },
       });
 
-      // Debug logs to help diagnose consumption issues
       const availableGrams = barras.reduce((sum, b) => {
         return sum + Number(b.pesoGramos || 0) * Number(b.cantidad || 0);
       }, 0);
+
+      const requiredGrams = alreadyUsedGrams + toAddGrams;
+
       console.log('Porcionado calc:', {
-        porcionadoId: id,
-        gramaje: target.gramaje,
-        cantidad: target.cantidad,
+        producto,
+        gramaje,
         toAddGrams,
         alreadyUsedGrams,
-        requiredGrams: alreadyUsedGrams + toAddGrams,
+        requiredGrams,
         availableGrams,
         barrasCount: barras.length,
       });
-
-      const requiredGrams = alreadyUsedGrams + toAddGrams;
 
       if (requiredGrams > availableGrams) {
         return res.status(409).json({
@@ -223,22 +264,43 @@ porcionadosRouter.patch('/:id', async (req, res) => {
       }
     }
 
-    const updated = await prisma.porcionado.update({
-      where: { id },
-      data: {
-        estado,
-        fecha: typeof fecha === 'string' ? toDayStart(fecha) : undefined,
-      },
+    // Update all matching hamburguesas
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.hamburguesa.updateMany({
+        where: {
+          delivery: {
+            fecha: {
+              gte: range.start,
+              lte: range.end,
+            },
+          },
+          tipo: producto,
+          gramaje: gramaje,
+          estado: { not: estado }, // Only update if not already in target state
+        },
+        data: {
+          estado,
+          updatedAt: new Date(),
+        },
+      });
+
+      return updated;
     });
 
-    res.json(updated);
+    res.json({
+      success: true,
+      producto,
+      gramaje,
+      estado,
+      updatedCount: result.count,
+    });
   } catch (error) {
     console.error('Error updating porcionado:', error);
     res.status(500).json({ error: 'Failed to update porcionado' });
   }
 });
 
-// POST mark: create porcionado row if missing, then mark as porcionado (consume barras)
+// POST mark: mark hamburguesas as porcionado (consume barras)
 porcionadosRouter.post('/mark', async (req, res) => {
   try {
     const { producto, gramaje, cantidad, fecha } = req.body || {};
@@ -250,53 +312,49 @@ porcionadosRouter.post('/mark', async (req, res) => {
     const range = buildDayRange(fecha);
     if (!range) return res.status(400).json({ error: 'Fecha inválida' });
 
-    const dayStart = toDayStart(fecha);
-
     const result = await prisma.$transaction(async (tx) => {
-      let target = await tx.porcionado.findFirst({
+      // Find all hamburguesas matching producto and gramaje for the date
+      const deliveries = await tx.delivery.findMany({
         where: {
-          producto,
-          gramaje: Number(gramaje),
-          fecha: { gte: range.start, lte: range.end },
-        },
-      });
-
-      if (!target) {
-        target = await tx.porcionado.create({
-          data: {
-            producto,
-            gramaje: Number(gramaje),
-            cantidad: Number(cantidad),
-            fecha: dayStart,
-            estado: 'pendiente',
+          fecha: {
+            gte: range.start,
+            lte: range.end,
           },
-        });
-      } else {
-        // ensure cantidad matches deliveries aggregation
-        await tx.porcionado.update({ where: { id: target.id }, data: { cantidad: Number(cantidad) } });
-        target = await tx.porcionado.findUnique({ where: { id: target.id } });
-      }
-
-      if (!target) throw new Error('Failed to create/find porcionado');
-
-      if (target.estado === 'porcionado') {
-        return target;
-      }
-
-      const existingPorcionados = await tx.porcionado.findMany({
-        where: {
-          estado: 'porcionado',
-          fecha: { gte: range.start, lte: range.end },
-          NOT: { id: target.id },
         },
-        select: { gramaje: true, cantidad: true },
+        include: { hamburguesas: true },
       });
 
-      const alreadyUsedGrams = existingPorcionados.reduce((sum, p) => {
-        return sum + Number(p.gramaje || 0) * Number(p.cantidad || 0);
-      }, 0);
+      const relevantHamburguesas = deliveries.flatMap(d => 
+        d.hamburguesas.filter(h => 
+          (h.tipo || 'hamburguesa') === producto && 
+          Number(h.gramaje || 0) === gramaje
+        )
+      );
 
-      const toAddGrams = Number(target.gramaje || 0) * Number(target.cantidad || 0);
+      if (relevantHamburguesas.length === 0) {
+        throw new Error('No hamburguesas encontradas para porcionar');
+      }
+
+      // Check if all are already porcionadas
+      const allPorcionadas = relevantHamburguesas.every(h => h.estado === 'porcionado');
+      if (allPorcionadas) {
+        return { success: true, message: 'Todos ya están porcionados' };
+      }
+
+      // Calculate what needs to be porcionado
+      const toPorcionarHamburguesas = relevantHamburguesas.filter(h => h.estado !== 'porcionado');
+      const toAddGrams = toPorcionarHamburguesas.reduce((sum, h) => 
+        sum + (Number(h.gramaje || 0) * Number(h.cantidad || 0)), 0
+      );
+
+      // Get all porcionadas from the date to know what's already used
+      const allPorcionadosHamburguesas = deliveries
+        .flatMap(d => d.hamburguesas)
+        .filter(h => h.estado === 'porcionado');
+      
+      const alreadyUsedGrams = allPorcionadosHamburguesas.reduce((sum, h) => 
+        sum + (Number(h.gramaje || 0) * Number(h.cantidad || 0)), 0
+      );
 
       const barras = await tx.barra.findMany({
         where: { disponible: true },
@@ -334,8 +392,26 @@ porcionadosRouter.post('/mark', async (req, res) => {
         throw err;
       }
 
-      const updated = await tx.porcionado.update({ where: { id: target.id }, data: { estado: 'porcionado' } });
-      return updated;
+      // Update all matching hamburguesas to porcionado
+      await tx.hamburguesa.updateMany({
+        where: {
+          delivery: {
+            fecha: {
+              gte: range.start,
+              lte: range.end,
+            },
+          },
+          tipo: producto,
+          gramaje: gramaje,
+          estado: { not: 'porcionado' },
+        },
+        data: {
+          estado: 'porcionado',
+          updatedAt: new Date(),
+        },
+      });
+
+      return { success: true, producto, gramaje };
     });
 
     res.json(result);
@@ -344,6 +420,5 @@ porcionadosRouter.post('/mark', async (req, res) => {
     if (error?.status === 409) {
       return res.status(409).json({ error: error.message, ...(error.payload || {}) });
     }
-    res.status(500).json({ error: 'Failed to mark porcionado' });
-  }
+    res.status(500).json({ error: error.message || 'Failed to mark porcionado' });  }
 });

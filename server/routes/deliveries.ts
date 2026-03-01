@@ -285,8 +285,7 @@ deliveriesRouter.post('/', async (req, res) => {
               cantidad: h.cantidad,
               gramaje: h.gramaje,
               precio: h.precio || null,
-              descripcion: h.descripcion,
-            })),
+              descripcion: h.descripcion,              estado: h.estado || 'pendiente',            })),
           },
         },
         include: {
@@ -396,6 +395,7 @@ deliveriesRouter.put('/:id', async (req, res) => {
               gramaje: h.gramaje,
               precio: h.precio || null,
               descripcion: h.descripcion,
+              estado: h.estado || 'pendiente',
             })),
           },
         },

@@ -63,11 +63,15 @@ model Hamburguesa {
   gramaje     Float
   precio      Float?   // Precio unitario o del paquete
   descripcion String?
+  estado      String   @default("pendiente") // pendiente | porcionado
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
   delivery    Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
 
   @@index([deliveryId])
+  @@index([estado])
+  @@index([gramaje])
 }
 
 model Pago {
@@ -103,17 +107,4 @@ model Barra {
   @@index([disponible])
 }
 
-model Porcionado {
-  id          String   @id @default(uuid())
-  producto    String   @default("hamburguesa")
-  gramaje     Float
-  cantidad    Int
-  fecha       DateTime
-  estado      String   @default("pendiente") // pendiente | porcionado
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  @@index([fecha])
-  @@index([gramaje])
-  @@index([estado])
-}
