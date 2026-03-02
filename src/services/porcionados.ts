@@ -18,7 +18,6 @@ export const porcionadosService = {
     gramaje: number;
     cantidad: number;
     fecha: string;
-    nombre_cliente?: string;
   }): Promise<Porcionado> => {
     return api.post('/porcionados/mark', data);
   },

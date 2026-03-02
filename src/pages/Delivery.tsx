@@ -55,6 +55,8 @@ const DeliveryPage = () => {
   const [precioTotal, setPrecioTotal] = useState('');
   const [precioManualmenteEditado, setPrecioManualmenteEditado] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterStart, setFilterStart] = useState<string>('');
+  const [filterEnd, setFilterEnd] = useState<string>('');
   const itemsPerPage = 5;
   const [rescheduleDialog, setRescheduleDialog] = useState<{
     open: boolean;
@@ -69,10 +71,18 @@ const DeliveryPage = () => {
   });
 
   // Fetch deliveries
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ['deliveries'],
-    queryFn: deliveriesService.getAll,
+  const { data: deliveries = [], refetch: refetchDeliveries } = useQuery({
+    queryKey: ['deliveries', filterStart, filterEnd],
+    queryFn: () => deliveriesService.getAll({ startDate: filterStart, endDate: filterEnd }),
   });
+
+  // selectedClient debe declararse antes del useEffect
+  const selectedClient = clients.find(c => c.id === selectedClientId) || null;
+
+  useEffect(() => {
+    refetchDeliveries();
+    setCurrentPage(1);
+  }, [filterStart, filterEnd, refetchDeliveries]);
 
   // Create delivery mutation
   const createDeliveryMutation = useMutation({
@@ -101,13 +111,9 @@ const DeliveryPage = () => {
     }).format(value);
   };
 
-  // Calcular precio total automáticamente basado en los productos
+  // Calcular precio total automáticamente basado en los productos o valorKg
   useEffect(() => {
-    // Si el usuario ha editado manualmente, no hacer nada
-    if (precioManualmenteEditado) {
-      return;
-    }
-
+    if (precioManualmenteEditado) return;
     // Calcular el total de los items con precio
     const totalItems = hamburguesas.reduce((acc, item) => {
       if (item.precio && item.cantidad) {
@@ -115,15 +121,25 @@ const DeliveryPage = () => {
       }
       return acc;
     }, 0);
-    
-    // Solo actualizar el precio si el campo está vacío
-    // De lo contrario, mantener el valor actual para que el usuario pueda sumar manualmente
-    if (!precioTotal && totalItems > 0) {
+
+    if (totalItems > 0) {
       setPrecioTotal(totalItems.toString());
-    } else if (hamburguesas.length === 0) {
-      setPrecioTotal('');
+      return;
     }
-  }, [hamburguesas, precioManualmenteEditado]);
+
+    // Si no hay precios, usar valorKg del cliente
+    if (selectedClient && selectedClient.valorKg && hamburguesas.length > 0) {
+      const totalGramos = hamburguesas.reduce((acc, h) => acc + h.cantidad * h.gramaje, 0);
+      const totalKg = totalGramos / 1000;
+      const computed = Math.round(totalKg * (selectedClient.valorKg || 0));
+      if (!isNaN(computed)) {
+        setPrecioTotal(String(computed));
+        return;
+      }
+    }
+    // Si no hay nada, dejar vacío
+    setPrecioTotal('');
+  }, [hamburguesas, precioManualmenteEditado, selectedClient]);
 
   const handleAddHamburguesa = (hamburguesa: Hamburguesa) => {
     // Agregar tipo en la descripción si no tiene descripción
@@ -255,35 +271,50 @@ const DeliveryPage = () => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
-  const selectedClient = clients.find(c => c.id === selectedClientId) || null;
-
-  // Auto-calc precioTotal from client's valorKg when hamburguesas change
-  useEffect(() => {
-    if (!selectedClient) return;
-    if (!selectedClient.valorKg) return;
-    if (!hamburguesas || hamburguesas.length === 0) return;
-
-    // If user already set a precioTotal manually, don't overwrite
-    if (precioTotal && precioTotal.trim() !== '') return;
-
-    const totalGramos = hamburguesas.reduce((acc, h) => acc + h.cantidad * h.gramaje, 0);
-    const totalKg = totalGramos / 1000;
-    const computed = Math.round(totalKg * (selectedClient.valorKg || 0));
-    if (!isNaN(computed)) {
-      setPrecioTotal(String(computed));
-    }
-  }, [hamburguesas, selectedClient]);
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container py-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Agenda de Entregas</h1>
-            <p className="text-sm text-muted-foreground">
-              Planifica entregas de hamburguesas por día
-            </p>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold">Programación de Entregas</h1>
+              <p className="text-sm text-muted-foreground">
+                Gestiona las entregas de los clientes y programa nuevas entregas
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div>
+                <label className="block text-sm text-muted-foreground">Desde</label>
+                <input
+                  type="date"
+                  value={filterStart}
+                  onChange={(e) => setFilterStart(e.target.value)}
+                  className="mt-1 block w-44 rounded-md border p-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground">Hasta</label>
+                <input
+                  type="date"
+                  value={filterEnd}
+                  onChange={(e) => setFilterEnd(e.target.value)}
+                  className="mt-1 block w-44 rounded-md border p-2"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFilterStart('');
+                    setFilterEnd('');
+                  }}
+                >
+                  Limpiar
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </header>

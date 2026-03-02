@@ -5,6 +5,7 @@ export interface Hamburguesa {
   gramaje: number;       // Peso en gramos
   precio?: number;       // Precio unitario o del paquete
   descripcion?: string;  // Ej: "Sencilla", "Doble", "Con queso"
+  estado?: 'pendiente' | 'porcionado';  // Estado del porcionado
 }
 
 export interface Delivery {

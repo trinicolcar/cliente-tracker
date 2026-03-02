@@ -11,6 +11,8 @@ import EstadoCuentaPage from "./pages/EstadoCuenta";
 import ReportesPage from "./pages/Reportes";
 import InvoicePage from "./pages/Invoice";
 import NotFound from "./pages/NotFound";
+import PorcionadaPage from "./pages/Porcionada";
+import BarrasPage from "./pages/Barras";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,6 +38,8 @@ const App = () => {
             <Route path="/pagos" element={<PagosPage />} />
             <Route path="/estado-cuenta" element={<EstadoCuentaPage />} />
             <Route path="/reportes" element={<ReportesPage />} />
+            <Route path="/porcionada" element={<PorcionadaPage />} />
+            <Route path="/barras" element={<BarrasPage />} />
             <Route path="/factura/:id" element={<InvoicePage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

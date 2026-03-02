@@ -112,8 +112,9 @@ const Index = () => {
     }
   };
 
-  const activeClients = clients.filter((c) => c.activo).length;
-  const totalBalance = clients.reduce((acc, c) => acc + c.estadoCuenta, 0);
+  const totalBalance = clients.reduce((acc, c) => acc + (c.estadoCuenta > 0 ? c.estadoCuenta : 0), 0);
+  const totalDebt = clients.reduce((acc, c) => acc + (c.estadoCuenta < 0 ? Math.abs(c.estadoCuenta) : 0), 0);
+  const netBalance = totalBalance - totalDebt;
 
   if (loadingClients) {
     return (
@@ -144,29 +145,33 @@ const Index = () => {
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-card rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Total Clientes</p>
-            <p className="text-2xl font-semibold">{clients.length}</p>
-          </div>
-          <div className="bg-card rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Clientes Activos</p>
-            <p className="text-2xl font-semibold text-success">{activeClients}</p>
-          </div>
-          <div className="bg-card rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Balance Total</p>
-            <p
-              className={`text-2xl font-semibold ${
-                totalBalance > 0
-                  ? 'text-warning'
-                  : totalBalance < 0
-                  ? 'text-destructive'
-                  : 'text-success'
-              }`}
-            >
+            <p className="text-sm text-muted-foreground">Deudas Totales</p>
+            <p className="text-2xl font-semibold text-red-700">
               {new Intl.NumberFormat('es-CO', {
                 style: 'currency',
                 currency: 'COP',
                 minimumFractionDigits: 0,
               }).format(totalBalance)}
+            </p>
+          </div>
+          <div className="bg-card rounded-lg border p-4">
+            <p className="text-sm text-muted-foreground">Saldos Totales</p>
+            <p className="text-2xl font-semibold text-green-700">
+              {new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 0,
+              }).format(totalDebt)}
+            </p>
+          </div>
+          <div className="bg-card rounded-lg border p-4">
+            <p className="text-sm text-muted-foreground">Balance</p>
+            <p className={`text-2xl font-semibold ${netBalance > 0 ? 'text-red-700' : netBalance < 0 ? 'text-green-700' : 'text-muted-foreground'}`}>
+              {new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 0,
+              }).format(netBalance)}
             </p>
           </div>
         </div>

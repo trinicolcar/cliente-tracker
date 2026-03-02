@@ -3,6 +3,8 @@ import cors from 'cors';
 import { clientsRouter } from './routes/clients';
 import { deliveriesRouter } from './routes/deliveries';
 import { pagosRouter } from './routes/pagos';
+import { barrasRouter } from './routes/barras';
+import { porcionadosRouter } from './routes/porcionados';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +17,8 @@ app.use(express.json());
 app.use('/api/clients', clientsRouter);
 app.use('/api/deliveries', deliveriesRouter);
 app.use('/api/pagos', pagosRouter);
+app.use('/api/barras', barrasRouter);
+app.use('/api/porcionados', porcionadosRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

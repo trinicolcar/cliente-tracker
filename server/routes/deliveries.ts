@@ -7,7 +7,35 @@ export const deliveriesRouter = Router();
 // GET all deliveries
 deliveriesRouter.get('/', async (req, res) => {
   try {
+    const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+    const where: any = {};
+
+    const parseLocalDate = (value: string) => {
+      const [year, month, day] = value.split('T')[0].split('-').map(Number);
+      const date = new Date(year, (month || 1) - 1, day || 1);
+      if (Number.isNaN(date.getTime())) return null;
+      return date;
+    };
+
+    if (startDate || endDate) {
+      const start = startDate ? parseLocalDate(startDate) : null;
+      const end = endDate ? parseLocalDate(endDate) : null;
+
+      if ((startDate && !start) || (endDate && !end)) {
+        return res.status(400).json({ error: 'Fechas inválidas' });
+      }
+
+      if (start) start.setHours(0, 0, 0, 0);
+      if (end) end.setHours(23, 59, 59, 999);
+
+      where.fecha = {
+        ...(start ? { gte: start } : {}),
+        ...(end ? { lte: end } : {}),
+      };
+    }
+
     const deliveries = await prisma.delivery.findMany({
+      where,
       include: {
         hamburguesas: true,
         client: true,
@@ -252,8 +280,7 @@ deliveriesRouter.post('/', async (req, res) => {
               cantidad: h.cantidad,
               gramaje: h.gramaje,
               precio: h.precio || null,
-              descripcion: h.descripcion,
-            })),
+              descripcion: h.descripcion,              estado: h.estado || 'pendiente',            })),
           },
         },
         include: {
@@ -363,6 +390,7 @@ deliveriesRouter.put('/:id', async (req, res) => {
               gramaje: h.gramaje,
               precio: h.precio || null,
               descripcion: h.descripcion,
+              estado: h.estado || 'pendiente',
             })),
           },
         },

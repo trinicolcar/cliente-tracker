@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 
 /generated/prisma
+# Database
+dev.db
+dev.db-shm
+dev.db-wal

@@ -43,7 +43,7 @@ Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  El sistema se esta iniciando..." -ForegroundColor White
 Write-Host ""
-Write-Host "  Frontend: http://localhost:5173" -ForegroundColor Cyan
+Write-Host "  Frontend: http://localhost:8080" -ForegroundColor Cyan
 Write-Host "  Backend:  http://localhost:3000" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  El navegador se abrira automaticamente" -ForegroundColor Yellow
@@ -54,7 +54,7 @@ Write-Host ""
 Start-Sleep -Seconds 3
 
 # Abrir navegador
-Start-Process "http://localhost:5173"
+Start-Process "http://localhost:8080"
 
 # Iniciar aplicacion
 npm run dev:all

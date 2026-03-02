@@ -1,3 +1,12 @@
+  // Paginación
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(porcionadaWithCliente.length / itemsPerPage);
+  const paginated = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return porcionadaWithCliente.slice(start, start + itemsPerPage);
+  }, [porcionadaWithCliente, page]);
+
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, ArrowUpDown } from 'lucide-react';
@@ -17,6 +26,9 @@ import { deliveriesService } from '@/services/deliveries';
 import { clientsService } from '@/services/clients';
 import Papa from 'papaparse';
 
+// Hook para obtener el nombre del cliente para cada item de porcionada
+import { useEffect } from 'react';
+
 const PorcionadaPage = () => {
     // CSV export handler
     const handleExportCSV = async () => {
@@ -27,16 +39,14 @@ const PorcionadaPage = () => {
         const deliveries = await deliveriesService.getAll({ startDate, endDate });
         const clients = await clientsService.getAll();
 
-        // Map clientId to client
-        const clientMap = Object.fromEntries(clients.map(c => [c.id, c]));
+        // Map clientId to client name
+        const clientMap = Object.fromEntries(clients.map(c => [c.id, c.nombre]));
 
         // Build CSV rows
         const rows = deliveries.map((delivery, idx) => {
-          const client = clientMap[delivery.clientId] || {};
+          const clientName = clientMap[delivery.clientId] || '';
           // Aggregate hamburguesas
           const hamburguesas = delivery.hamburguesas || [];
-          const totalGrDiet = hamburguesas.reduce((sum, h) => sum + (h.gramaje || 0) * (h.cantidad || 0), 0);
-          const totalGrPatas = hamburguesas.reduce((sum, h) => sum + (h.tipo === 'patas' ? (h.gramaje || 0) * (h.cantidad || 0) : 0), 0);
           const cantidad = hamburguesas.reduce((sum, h) => sum + (h.cantidad || 0), 0);
           const gramaje = hamburguesas.length > 0 ? hamburguesas[0].gramaje : 0;
           const gramajeTotal = hamburguesas.map(h => `${h.cantidad}x${h.gramaje} Gr`).join(' + ');
@@ -45,17 +55,13 @@ const PorcionadaPage = () => {
             numero_orden: delivery.id,
             fecha: new Date(delivery.fecha).toLocaleDateString('es-CO'),
             paquetes: 1,
-            nombre_cliente: client.nombre || '',
+            nombre_cliente: clientName,
             cantidad,
             gramos: gramaje,
             gramaje_total: gramajeTotal,
-            direccion: client.direccion || '',
-            telefono: client.telefono || '',
-            total_gr_dieta: totalGrDiet,
-            total_gr_patas: totalGrPatas,
             total_venta: totalVenta,
             producto: hamburguesas.length > 0 ? hamburguesas[0].tipo || 'Chef-bio Can' : 'Chef-bio Can',
-            presentacion: `Chef-bio Can X ${(totalGrDiet / 1000).toLocaleString('es-CO')} kg`,
+            presentacion: `Chef-bio Can X ${(totalVenta / 1000).toLocaleString('es-CO')} kg`,
           };
         });
 
@@ -89,6 +95,7 @@ const PorcionadaPage = () => {
   );
   const [sortAsc, setSortAsc] = useState(true);
 
+
   const { data: porcionados = [], isLoading } = useQuery({
     queryKey: ['porcionados', selectedDate],
     queryFn: () => porcionadosService.getByDate(selectedDate),
@@ -96,6 +103,44 @@ const PorcionadaPage = () => {
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
+
+  // Obtener deliveries y clients para mapear nombre del cliente
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ['deliveries', selectedDate],
+    queryFn: () => deliveriesService.getAll({ startDate: selectedDate, endDate: selectedDate }),
+    staleTime: 0,
+  });
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients'],
+    queryFn: () => clientsService.getAll(),
+    staleTime: Infinity,
+  });
+
+  // Mapeo de clientId a nombre
+  const clientMap = useMemo(() => {
+    return Object.fromEntries(clients.map((c) => [c.id, c.nombre]));
+  }, [clients]);
+
+  // Mapeo de producto+gramaje a nombre(s) de cliente(s)
+  const porcionadaWithCliente = useMemo(() => {
+    // Para cada item de porcionada, buscar los deliveries con hamburguesas que coincidan
+    return porcionados.map((item) => {
+      // Buscar deliveries con hamburguesas que coincidan producto y gramaje
+      const matchingDeliveries = deliveries.filter((d) =>
+        d.hamburguesas.some((h) =>
+          (h.tipo || 'hamburguesa') === item.producto && Number(h.gramaje) === Number(item.gramaje)
+        )
+      );
+      // Obtener nombres de clientes únicos
+      const nombresClientes = Array.from(
+        new Set(matchingDeliveries.map((d) => clientMap[d.clientId] || ''))
+      ).filter(Boolean);
+      return {
+        ...item,
+        nombre_cliente: nombresClientes.join(', '),
+      };
+    });
+  }, [porcionados, deliveries, clientMap]);
 
   const updateEstadoMutation = useMutation({
     mutationFn: ({ id, estado }: { id: string; estado: 'pendiente' | 'porcionado' }) =>
@@ -123,18 +168,24 @@ const PorcionadaPage = () => {
     },
   });
 
-  const sorted = useMemo(() => {
-    const items = porcionados;
-    items.sort((a, b) => (sortAsc ? a.gramaje - b.gramaje : b.gramaje - a.gramaje));
-    return items;
-  }, [porcionados, sortAsc]);
 
-  // Paginación
+  // Ordenar por gramaje sobre la lista con cliente
+  // Ordenar por gramaje (porción individual)
+  const [sortAsc, setSortAsc] = useState(true);
+  const sortedPorcionada = useMemo(() => {
+    return [...porcionadaWithCliente].sort((a, b) =>
+      sortAsc ? a.gramaje - b.gramaje : b.gramaje - a.gramaje
+    );
+  }, [porcionadaWithCliente, sortAsc]);
+
+  // Paginación sobre la lista ordenada
   const [page, setPage] = useState(1);
   const itemsPerPage = 10;
-  const totalPages = Math.ceil(sorted.length / itemsPerPage);
-  const paginated = sorted.slice((page - 1) * itemsPerPage, page * itemsPerPage);
-
+  const totalPages = Math.ceil(sortedPorcionada.length / itemsPerPage);
+  const paginated = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return sortedPorcionada.slice(start, start + itemsPerPage);
+  }, [sortedPorcionada, page]);
   const handleMarkPorcionado = (item: any) => {
     if (item.porcionadoId) {
       updateEstadoMutation.mutate({ id: item.porcionadoId, estado: 'porcionado' });
@@ -187,7 +238,7 @@ const PorcionadaPage = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Producto</TableHead>
-                  <TableHead>Cliente</TableHead>
+                <TableHead>Cliente</TableHead>
                 <TableHead>Gramaje</TableHead>
                 <TableHead>Cantidad</TableHead>
                 <TableHead>Estado</TableHead>
@@ -197,40 +248,40 @@ const PorcionadaPage = () => {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     Cargando...
                   </TableCell>
                 </TableRow>
-              ) : sorted.length === 0 ? (
+              ) : porcionadaWithCliente.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     No hay producción para la fecha seleccionada
                   </TableCell>
                 </TableRow>
               ) : (
                 paginated.map((item) => (
-                    <TableRow key={item.id}>
-                        <TableCell className="capitalize">{item.producto}</TableCell>
-                        <TableCell>{item.nombre_cliente || '-'}</TableCell>
-                        <TableCell>{item.gramaje} g</TableCell>
-                        <TableCell>{item.cantidad}</TableCell>
-                        <TableCell>
-                          <Badge variant={item.estado === 'porcionado' ? 'default' : 'outline'}>
-                            {item.estado}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant={item.estado === 'porcionado' ? 'outline' : 'default'}
-                            disabled={item.estado === 'porcionado' || updateEstadoMutation.isLoading || markMutation.isLoading}
-                            onClick={() => handleMarkPorcionado(item)}
-                          >
-                            <Check className="h-4 w-4 mr-2" />
-                            {item.estado === 'porcionado' ? 'Porcionado' : 'Marcar porcionado'}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+                  <TableRow key={item.id}>
+                    <TableCell className="capitalize">{item.producto}</TableCell>
+                    <TableCell>{item.nombre_cliente || '-'}</TableCell>
+                    <TableCell>{item.gramaje} g</TableCell>
+                    <TableCell>{item.cantidad}</TableCell>
+                    <TableCell>
+                      <Badge variant={item.estado === 'porcionado' ? 'default' : 'outline'}>
+                        {item.estado}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant={item.estado === 'porcionado' ? 'outline' : 'default'}
+                        disabled={item.estado === 'porcionado' || updateEstadoMutation.isPending || markMutation.isPending}
+                        onClick={() => handleMarkPorcionado(item)}
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        {item.estado === 'porcionado' ? 'Porcionado' : 'Marcar porcionado'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
                     {/* Paginador */}
