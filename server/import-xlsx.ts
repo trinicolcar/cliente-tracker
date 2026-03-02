@@ -84,7 +84,7 @@ async function importFromXlsx() {
             totalPorciones: Number(row['TOTAL PORCIONES']) || 0,
             duracionPedido: Number(row['DURACION DEL PEDIDO']) || 7,
             proximaEntrega: proximaEntrega,
-            valorKg: Number(row[' VALOR KG ']) || 0,
+            valorKg: Number(row[' VALOR KG']) || 0,
             valorPedido: Number(row['gramos por pedido']) || 0,
             direccion: '',
             latitud: latitud,
