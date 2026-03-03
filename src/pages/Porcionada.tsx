@@ -1,11 +1,3 @@
-  // Paginación
-  const [page, setPage] = useState(1);
-  const itemsPerPage = 10;
-  const totalPages = Math.ceil(porcionadaWithCliente.length / itemsPerPage);
-  const paginated = useMemo(() => {
-    const start = (page - 1) * itemsPerPage;
-    return porcionadaWithCliente.slice(start, start + itemsPerPage);
-  }, [porcionadaWithCliente, page]);
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,7 +22,8 @@ import Papa from 'papaparse';
 import { useEffect } from 'react';
 
 const PorcionadaPage = () => {
-    // CSV export handler
+
+  // CSV export handler
     const handleExportCSV = async () => {
       try {
         // Get deliveries for selected date
@@ -171,7 +164,6 @@ const PorcionadaPage = () => {
 
   // Ordenar por gramaje sobre la lista con cliente
   // Ordenar por gramaje (porción individual)
-  const [sortAsc, setSortAsc] = useState(true);
   const sortedPorcionada = useMemo(() => {
     return [...porcionadaWithCliente].sort((a, b) =>
       sortAsc ? a.gramaje - b.gramaje : b.gramaje - a.gramaje

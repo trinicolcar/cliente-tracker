@@ -72,7 +72,7 @@ porcionadosRouter.get('/', async (req, res) => {
         const cantidad = Number(h.cantidad || 0);
         const key = `${producto}-${gramaje}`;
         const current = aggregated.get(key);
-        
+
         if (current) {
           current.cantidad += cantidad;
           // If any hamburguesa in this group is porcionado, mark the whole group as porcionado
@@ -80,10 +80,10 @@ porcionadosRouter.get('/', async (req, res) => {
             current.estado = 'porcionado';
           }
         } else {
-          aggregated.set(key, { 
-            producto, 
-            gramaje, 
-            cantidad, 
+          aggregated.set(key, {
+            producto,
+            gramaje,
+            cantidad,
             estado: h.estado || 'pendiente'
           });
         }
@@ -121,11 +121,11 @@ porcionadosRouter.patch('/:id', async (req, res) => {
     if (parts.length < 2) {
       return res.status(400).json({ error: 'ID inválido' });
     }
-    
+
     // Reconstruct producto (may contain hyphens) and gramaje
     const gramaje = parseFloat(parts[parts.length - 1]);
     const producto = parts.slice(0, -1).join('-');
-    
+
     if (isNaN(gramaje)) {
       return res.status(400).json({ error: 'ID inválido: gramaje no es un número' });
     }
@@ -146,9 +146,9 @@ porcionadosRouter.patch('/:id', async (req, res) => {
       include: { hamburguesas: true },
     });
 
-    const relevantHamburguesas = deliveries.flatMap(d => 
-      d.hamburguesas.filter(h => 
-        (h.tipo || 'hamburguesa') === producto && 
+    const relevantHamburguesas = deliveries.flatMap(d =>
+      d.hamburguesas.filter(h =>
+        (h.tipo || 'hamburguesa') === producto &&
         Number(h.gramaje || 0) === gramaje
       )
     );
@@ -166,11 +166,11 @@ porcionadosRouter.patch('/:id', async (req, res) => {
     if (estado === 'porcionado' && currentEstado !== 'porcionado') {
       // Check if already porcionadas
       const alreadyPorcionadas = relevantHamburguesas.filter(h => h.estado === 'porcionado');
-      
+
       if (alreadyPorcionadas.length === relevantHamburguesas.length) {
         // All already porcionadas, just return success
-        res.json({ 
-          success: true, 
+        res.json({
+          success: true,
           message: 'Todos los items ya están porcionados',
           producto,
           gramaje,
@@ -212,7 +212,16 @@ porcionadosRouter.patch('/:id', async (req, res) => {
         return sum + Number(b.pesoGramos || 0) * Number(b.cantidad || 0);
       }, 0);
 
-      const requiredGrams = alreadyUsedGrams + toAddGrams;
+      const requiredGrams = toAddGrams;
+
+      if (requiredGrams > availableGrams) {
+        return res.status(409).json({
+          error: 'No hay suficiente material terminado para porcionar este pedido',
+          requiredGrams,
+          availableGrams,
+          shortageGrams: requiredGrams - availableGrams,
+        });
+      }
 
       console.log('Porcionado calc:', {
         producto,
@@ -324,9 +333,9 @@ porcionadosRouter.post('/mark', async (req, res) => {
         include: { hamburguesas: true },
       });
 
-      const relevantHamburguesas = deliveries.flatMap(d => 
-        d.hamburguesas.filter(h => 
-          (h.tipo || 'hamburguesa') === producto && 
+      const relevantHamburguesas = deliveries.flatMap(d =>
+        d.hamburguesas.filter(h =>
+          (h.tipo || 'hamburguesa') === producto &&
           Number(h.gramaje || 0) === gramaje
         )
       );
@@ -343,7 +352,7 @@ porcionadosRouter.post('/mark', async (req, res) => {
 
       // Calculate what needs to be porcionado
       const toPorcionarHamburguesas = relevantHamburguesas.filter(h => h.estado !== 'porcionado');
-      const toAddGrams = toPorcionarHamburguesas.reduce((sum, h) => 
+      const toAddGrams = toPorcionarHamburguesas.reduce((sum, h) =>
         sum + (Number(h.gramaje || 0) * Number(h.cantidad || 0)), 0
       );
 
@@ -351,8 +360,8 @@ porcionadosRouter.post('/mark', async (req, res) => {
       const allPorcionadosHamburguesas = deliveries
         .flatMap(d => d.hamburguesas)
         .filter(h => h.estado === 'porcionado');
-      
-      const alreadyUsedGrams = allPorcionadosHamburguesas.reduce((sum, h) => 
+
+      const alreadyUsedGrams = allPorcionadosHamburguesas.reduce((sum, h) =>
         sum + (Number(h.gramaje || 0) * Number(h.cantidad || 0)), 0
       );
 
@@ -366,7 +375,8 @@ porcionadosRouter.post('/mark', async (req, res) => {
         return sum + Number(b.pesoGramos || 0) * Number(b.cantidad || 0);
       }, 0);
 
-      const requiredGrams = alreadyUsedGrams + toAddGrams;
+      //const requiredGrams = alreadyUsedGrams + toAddGrams;
+      const requiredGrams = toAddGrams;
       if (requiredGrams > availableGrams) {
         const err: any = new Error('No hay suficiente material terminado para porcionar');
         err.status = 409;
@@ -420,5 +430,6 @@ porcionadosRouter.post('/mark', async (req, res) => {
     if (error?.status === 409) {
       return res.status(409).json({ error: error.message, ...(error.payload || {}) });
     }
-    res.status(500).json({ error: error.message || 'Failed to mark porcionado' });  }
+    res.status(500).json({ error: error.message || 'Failed to mark porcionado' });
+  }
 });
